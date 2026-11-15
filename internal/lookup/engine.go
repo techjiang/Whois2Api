@@ -167,14 +167,9 @@ func (e *Engine) Lookup(ctx context.Context, t *Target) (*model.Domain, []model.
 
 	applyChannel(domain, primary)
 
-	// A "not found" answer for a *subdomain* query describes the parent, not
-	// the subdomain. Never call a subdomain available.
-	if domain.Verdict == model.VerdictAvailable && t.SubdomainOf != "" {
-		domain.Verdict = model.VerdictRegistered
-		domain.Confidence = model.ConfidenceGood
-		domain.Alerts = append(domain.Alerts,
-			fmt.Sprintf("%s is a subdomain of the registered domain %s; registries only report the registrable domain.", t.ASCII, t.SubdomainOf))
-	}
+	// Subdomain handling deliberately lives in present(), not here. This
+	// result is what gets cached under the registrable domain's key, and a
+	// per-request rewrite would poison that shared entry.
 
 	// Corroborate with DNS. This never overrides an authoritative answer; it
 	// only adds evidence when the registries gave us nothing usable, or

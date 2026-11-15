@@ -57,10 +57,23 @@ func newTestServer(t *testing.T, cfg config.Config) (*Server, *fakeUpstream) {
 }
 
 // fakeUpstream answers deterministically without touching the network.
-type fakeUpstream struct{ calls int }
+type fakeUpstream struct {
+	calls int
+	// delay slows every answer so concurrency is observable.
+	delay time.Duration
+	// raw is attached to results, mimicking an upstream payload.
+	raw string
+}
 
 func (f *fakeUpstream) lookup(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []string, error) {
 	f.calls++
+	if f.delay > 0 {
+		select {
+		case <-time.After(f.delay):
+		case <-ctx.Done():
+			return nil, nil, nil, ctx.Err()
+		}
+	}
 	status := model.VerdictRegistered
 	if strings.HasPrefix(target.Query, "free-") {
 		status = model.VerdictAvailable
@@ -68,7 +81,7 @@ func (f *fakeUpstream) lookup(ctx context.Context, target *lookup.Target) (*mode
 	return &model.Domain{
 		Name: target.ASCII, TLD: target.TLD, Suffix: target.Suffix, Registrable: target.Registrable,
 		Verdict: status, Confidence: model.ConfidenceStrong, Source: model.SourceRDAP,
-		Registrar: "Test Registrar",
+		Registrar: "Test Registrar", Raw: f.raw,
 	}, nil, nil, nil
 }
 
@@ -327,5 +340,115 @@ func TestPanicIsRecovered(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "boom") {
 		t.Fatal("panic detail leaked to the client")
+	}
+}
+
+// A batch used to resolve its items one at a time, so 20 uncached domains cost
+// 20 registries round-trips in series. Each item must now run concurrently,
+// while the response keeps the caller's order.
+func TestBatchResolvesItemsConcurrentlyAndKeepsOrder(t *testing.T) {
+	s, fake := newTestServer(t, config.Config{MaxBatch: 8})
+	fake.delay = 120 * time.Millisecond
+
+	body := `{"domains":["one.com","two.com","three.com","four.com"]}`
+	start := time.Now()
+	rec := doRequest(t, s, http.MethodPost, "/api/v1/batch", body,
+		map[string]string{"Content-Type": "application/json"})
+	elapsed := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	// Serial execution would need >= 480ms; concurrent should be well under.
+	if elapsed > 400*time.Millisecond {
+		t.Fatalf("batch took %v for 4 domains with a 120ms upstream; it is not concurrent", elapsed)
+	}
+	var out struct {
+		Results []model.BatchItem `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := []string{"one.com", "two.com", "three.com", "four.com"}
+	if len(out.Results) != len(want) {
+		t.Fatalf("got %d results, want %d", len(out.Results), len(want))
+	}
+	for i, q := range want {
+		if out.Results[i].Query != q {
+			t.Fatalf("result %d query = %q, want %q (order not preserved)", i, out.Results[i].Query, q)
+		}
+	}
+}
+
+// The raw upstream payload is opt-in.
+func TestRawPayloadIsOptIn(t *testing.T) {
+	s, fake := newTestServer(t, config.Config{})
+	fake.raw = "Domain Name: example.com"
+
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", nil)
+	var plain lookup.ServiceResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &plain); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if plain.Domain.Raw != "" {
+		t.Fatalf("raw payload leaked without ?raw=1: %q", plain.Domain.Raw)
+	}
+}
+
+// A cached answer has no payload, so asking for one must say so rather than
+// return an empty field the caller would read as "the registry said nothing".
+func TestRawPayloadOnCachedAnswerIsExplained(t *testing.T) {
+	s, fake := newTestServer(t, config.Config{})
+	fake.raw = "Domain Name: example.com"
+
+	if rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", nil); rec.Code != http.StatusOK {
+		t.Fatalf("warm-up status = %d", rec.Code)
+	}
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com?raw=1", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var out lookup.ServiceResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !out.Meta.Cached {
+		t.Fatal("second lookup should be served from cache")
+	}
+	var explained bool
+	for _, w := range out.Meta.Warnings {
+		if strings.Contains(w, "fresh=1") {
+			explained = true
+		}
+	}
+	if !explained {
+		t.Fatalf("cached answer with ?raw=1 should point at ?fresh=1, warnings = %v", out.Meta.Warnings)
+	}
+
+	// ?fresh=1 must bypass the cache and deliver the payload.
+	rec = doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com?raw=1&fresh=1", "", nil)
+	var fresh lookup.ServiceResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &fresh); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if fresh.Meta.Cached {
+		t.Fatal("?fresh=1 must not be served from the cache")
+	}
+	if !strings.Contains(fresh.Domain.Raw, "Domain Name: example.com") {
+		t.Fatalf("fresh raw = %q, want the upstream payload", fresh.Domain.Raw)
+	}
+}
+
+func TestRawPayloadReturnedWhenAsked(t *testing.T) {
+	s, fake := newTestServer(t, config.Config{})
+	fake.raw = "Domain Name: example.com\nRegistrar: Test"
+
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com?raw=1", "", nil)
+	var out lookup.ServiceResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !strings.Contains(out.Domain.Raw, "Domain Name: example.com") {
+		t.Fatalf("raw = %q, want the upstream payload", out.Domain.Raw)
 	}
 }

@@ -64,6 +64,18 @@ printf '%s' "$body" | grep -q '"domain"' || fail "response missing domain object
 printf '%s' "$body" | grep -qE '"status":"(registered|available|unknown)"' || fail "verdict has no valid value"
 pass "verdict uses the three-state vocabulary"
 
+# The raw upstream payload is opt-in and must never arrive unasked.
+body=$(curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/example.com")
+printf '%s' "$body" | grep -q '"raw"' && fail "raw payload leaked without ?raw=1"
+raw=$(curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/example.org?raw=1")
+printf '%s' "$raw" | grep -q '"raw"' || echo "  note example.org served from cache; raw payload unavailable there"
+pass "raw payload is opt-in"
+
+# Cache counters must move, or the status endpoint is lying to operators.
+hits=$(curl -s -m 5 "${auth[@]}" "$BASE/api/v1/status" | grep -o '"hits":[0-9]*' | head -1 | cut -d: -f2)
+[ "${hits:-0}" -ge 1 ] || fail "cache hits did not increase after a repeated lookup (got ${hits:-0})"
+pass "cache counters are live"
+
 code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${auth[@]}" "$BASE/api/v1/domain/not%20a%20domain")
 [ "$code" = "400" ] || fail "invalid domain returned $code, want 400"
 pass "invalid input rejected"

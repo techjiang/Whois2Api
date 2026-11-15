@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/asoe/whois2api/internal/config"
@@ -16,6 +17,11 @@ import (
 	"github.com/asoe/whois2api/internal/model"
 	"github.com/asoe/whois2api/internal/version"
 )
+
+// batchConcurrency bounds how many domains one batch request resolves at once.
+// Higher would just queue on the registry's own patience, and the engine
+// already collapses duplicate keys.
+const batchConcurrency = 8
 
 // Server wires configuration, the lookup service and the HTTP handlers.
 type Server struct {
@@ -232,12 +238,57 @@ func (s *Server) handleDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.service.Lookup(r.Context(), name)
+	var (
+		result *lookup.ServiceResult
+		err    error
+	)
+	if wantsFresh(r) {
+		result, err = s.service.LookupFresh(r.Context(), name)
+	} else {
+		result, err = s.service.Lookup(r.Context(), name)
+	}
 	if err != nil {
 		s.writeLookupError(w, err, "lookup failed", "domain", name)
 		return
 	}
+	// The raw upstream payload is opt-in: it is useful when a verdict looks
+	// surprising, and noise (plus bytes) the rest of the time.
+	if result.Domain != nil {
+		if wantsRaw(r) {
+			if result.Domain.Raw == "" {
+				// Cached entries deliberately store no payload. Say so, and
+				// point at the flag that fixes it, instead of returning an
+				// empty field the caller would read as "the registry said
+				// nothing".
+				if result.Meta.Cached {
+					result.Meta.Warnings = append(result.Meta.Warnings,
+						"Cached answers carry no raw payload; add ?fresh=1 to query the registry again.")
+				} else {
+					result.Meta.Warnings = append(result.Meta.Warnings,
+						"This answer carried no upstream payload.")
+				}
+			}
+		} else {
+			result.Domain.Raw = ""
+		}
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// wantsRaw reports whether the caller asked for the upstream payload.
+func wantsRaw(r *http.Request) bool { return queryFlag(r, "raw") }
+
+// wantsFresh reports whether the caller asked to bypass the cache. It exists
+// for the one honest case where a cached answer is insufficient: fetching the
+// raw payload of a name that is already cached.
+func wantsFresh(r *http.Request) bool { return queryFlag(r, "fresh") }
+
+func queryFlag(r *http.Request, key string) bool {
+	switch strings.ToLower(r.URL.Query().Get(key)) {
+	case "1", "true", "yes":
+		return true
+	}
+	return false
 }
 
 // writeLookupError maps engine errors onto API responses.
@@ -286,18 +337,29 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items := make([]model.BatchItem, 0, len(req.Domains))
-	for _, raw := range req.Domains {
-		item := model.BatchItem{Query: raw}
-		res, err := s.service.Lookup(r.Context(), raw)
-		if err != nil {
-			item.Error = friendlyError(err)
-		} else {
-			item.Domain = res.Domain
-			item.Meta = res.Meta
-		}
-		items = append(items, item)
+	// Fan out: a batch of 20 uncached domains costs one registry round-trip,
+	// not twenty. Results keep the caller's order.
+	items := make([]model.BatchItem, len(req.Domains))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, batchConcurrency)
+	for i, raw := range req.Domains {
+		wg.Add(1)
+		go func(i int, raw string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			item := model.BatchItem{Query: raw}
+			res, err := s.service.Lookup(r.Context(), raw)
+			if err != nil {
+				item.Error = friendlyError(err)
+			} else {
+				item.Domain = res.Domain
+				item.Meta = res.Meta
+			}
+			items[i] = item
+		}(i, raw)
 	}
+	wg.Wait()
 	writeJSON(w, http.StatusOK, struct {
 		Results []model.BatchItem `json:"results"`
 		Count   int               `json:"count"`

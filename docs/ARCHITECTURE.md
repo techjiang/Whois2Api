@@ -144,7 +144,21 @@ answers for everyone. This is a correctness feature, not just an optimisation.
 was recently looked up. One background refresh runs per key.
 
 **Unknown is not cached.** A transient upstream failure must not be pinned for
-the whole TTL. `available` uses a much shorter TTL (5 min default) than
+the whole TTL.
+
+**The cache stores the registry answer, not the caller's question.** A view
+layer (`present`) layers per-request facts on top of a cached record: the name
+the caller typed, the subdomain relationship, a recomputed expiry countdown,
+and the raw payload. Anything request-shaped is stripped by `storageView`
+before the write. Getting this backwards is subtle and expensive — when the
+"a subdomain is never available" rewrite lived in the engine, it wrote
+`registered` into the entry shared with a genuinely available parent, so the
+next lookup of the parent reported a for-sale domain as taken.
+
+**Cache counters are wired at the store, not the caller.** `Get` counts a hit
+or a miss; the singleflight re-check uses `Peek` so de-duplication does not
+double the miss count. Stale serves are counted separately. A status endpoint
+that reports `hits: 0` on a warm cache is worse than no status endpoint. `available` uses a much shorter TTL (5 min default) than
 `registered` (30 min), because availability changes faster and a stale
 "available" is the expensive kind of wrong.
 
@@ -155,6 +169,9 @@ install" is "copy one file".
 
 - Every request carries a context with a total timeout; a hung registry cannot
   pin a goroutine indefinitely.
+- Batch lookups fan out with a bounded worker pool (8 in flight) and write
+  results back by index, so a 20-domain batch costs about one registry
+  round-trip instead of twenty while the response keeps the caller's order.
 - The race uses a buffered channel sized to the number of launched goroutines,
   so an early return never leaks a sender.
 - WHOIS reads use a per-chunk idle deadline (there is no length prefix on port

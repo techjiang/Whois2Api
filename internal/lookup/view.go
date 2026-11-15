@@ -26,11 +26,17 @@ func present(d *model.Domain, t *Target) *model.Domain {
 	out.SubdomainOf = t.SubdomainOf
 	out.Unicode = displayName(t.Input, t.ASCII)
 
-	// A cached "available" for the parent must never be shown for a subdomain:
-	// you cannot register www.example.com even when example.com is free.
+	// A cached "available" for the parent must never be shown as available for
+	// a subdomain: you cannot register www.example.com even when example.com is
+	// free. This rewrite belongs here, in the per-request view — doing it in the
+	// engine would write a "registered" verdict into the cache entry shared with
+	// the (genuinely available) parent.
 	if out.Verdict == model.VerdictAvailable && t.SubdomainOf != "" {
+		out.Verdict = model.VerdictRegistered
+		out.Confidence = model.ConfidenceGood
 		out.Alerts = append(out.Alerts,
-			fmt.Sprintf("%s is a subdomain of %s; registries report only the registrable domain.", t.ASCII, t.SubdomainOf))
+			fmt.Sprintf("%s is a subdomain of %s; registries report only the registrable domain. The registrable name %s is available.",
+				t.ASCII, t.SubdomainOf, t.SubdomainOf))
 	}
 
 	// Recompute time-relative fields at read time.
@@ -52,6 +58,9 @@ func storageView(d *model.Domain) *model.Domain {
 	out.Unicode = ""
 	out.DaysUntilExpiry = nil
 	out.Alerts = nil
+	// The upstream payload is a per-request debugging aid. Caching it would
+	// multiply every entry's size for a field almost nobody asks for.
+	out.Raw = ""
 	return out
 }
 

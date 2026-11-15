@@ -15,8 +15,12 @@ import (
 type limiter struct {
 	rate   float64 // tokens per second
 	burst  float64 // bucket depth
-	mu     sync.Mutex
-	shards []map[string]*bucket
+	shards []*shard
+}
+
+type shard struct {
+	mu      sync.Mutex
+	buckets map[string]*bucket
 }
 
 type bucket struct {
@@ -36,10 +40,10 @@ func newLimiter(perMinute, burst int) *limiter {
 	l := &limiter{
 		rate:   float64(perMinute) / 60.0,
 		burst:  float64(burst),
-		shards: make([]map[string]*bucket, limiterShards),
+		shards: make([]*shard, limiterShards),
 	}
 	for i := range l.shards {
-		l.shards[i] = make(map[string]*bucket, 64)
+		l.shards[i] = &shard{buckets: make(map[string]*bucket, 64)}
 	}
 	return l
 }
@@ -50,18 +54,18 @@ func (l *limiter) allow(key string, now time.Time) (bool, time.Duration) {
 	if l == nil {
 		return true, 0
 	}
-	idx := shardIndex(key)
-	l.mu.Lock()
-	shard := l.shards[idx]
-	b, ok := shard[key]
+	sh := l.shards[shardIndex(key)]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+	b, ok := sh.buckets[key]
 	if !ok {
 		b = &bucket{tokens: l.burst, lastSeen: now}
-		shard[key] = b
-		if len(shard) > 8192 {
+		sh.buckets[key] = b
+		if len(sh.buckets) > 8192 {
 			// Bound memory: drop stale buckets wholesale rather than grow.
-			for k, v := range shard {
+			for k, v := range sh.buckets {
 				if now.Sub(v.lastSeen) > 10*time.Minute {
-					delete(shard, k)
+					delete(sh.buckets, k)
 				}
 			}
 		}
@@ -82,7 +86,6 @@ func (l *limiter) allow(key string, now time.Time) (bool, time.Duration) {
 		need := 1 - b.tokens
 		wait = time.Duration(need / l.rate * float64(time.Second))
 	}
-	l.mu.Unlock()
 	return allowed, wait
 }
 

@@ -51,7 +51,10 @@ type RDAPResponse struct {
 	Result     parse.RDAPResult
 	Millis     int64
 	HTTPStatus int
-	Err        error
+	// Raw is the payload as received, for the debug view. It is trimmed to
+	// maxRDAPPreview so a hostile server cannot balloon a response.
+	Raw []byte
+	Err error
 }
 
 // Query fetches base+domain and parses it. base must end with "/".
@@ -105,7 +108,19 @@ func (c *RDAPClient) Query(ctx context.Context, base, asciiDomain string) RDAPRe
 		Result:     parse.ParseRDAP(body, resp.StatusCode),
 		HTTPStatus: resp.StatusCode,
 		Millis:     millisSince(start),
+		Raw:        preview(body, maxRDAPPreview),
 	}
+}
+
+// maxRDAPPreview bounds the payload kept for the debug view.
+const maxRDAPPreview = 16 << 10
+
+// preview trims a payload to at most max bytes for display.
+func preview(body []byte, max int) []byte {
+	if len(body) <= max {
+		return body
+	}
+	return body[:max]
 }
 
 func millisSince(t time.Time) int64 { return time.Since(t).Milliseconds() }

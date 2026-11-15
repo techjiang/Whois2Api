@@ -70,6 +70,7 @@ func (e *Engine) race(ctx context.Context, route tld.Route, domain string) ([]mo
 				cr.contacts = resp.Result.Contacts
 				cr.secureDNS = resp.Result.SecureDNS
 				cr.registryID = resp.Result.RegistryID
+				cr.raw = string(resp.Raw)
 				last = cr
 				if isUsable(cr.verdict) {
 					break
@@ -137,6 +138,19 @@ collect:
 		}
 	}
 
+	best := choose(collected, e.opts.PreferWhoIs)
+	if best.raw == "" {
+		// The winning channel gave no payload (an RDAP 404 with an empty body,
+		// typically). The debug view is far more useful with the sibling's
+		// payload than with nothing.
+		for _, c := range collected {
+			if c.raw != "" {
+				best.raw = c.raw
+				break
+			}
+		}
+	}
+
 	timings := make([]model.ChannelTiming, 0, len(collected))
 	for _, c := range collected {
 		t := model.ChannelTiming{Channel: c.source, Millis: c.millis, OK: isUsable(c.verdict)}
@@ -148,7 +162,7 @@ collect:
 		}
 		timings = append(timings, t)
 	}
-	return timings, choose(collected, e.opts.PreferWhoIs)
+	return timings, best
 }
 
 // choose picks the best answer by evidentiary strength, not arrival order.
@@ -235,6 +249,9 @@ func applyChannel(d *model.Domain, r channelResult) {
 	if isUsable(r.verdict) {
 		d.Source = r.source
 	}
+	// Keep the winning channel's payload for the debug view. The service layer
+	// strips it before caching, so this never reaches the database.
+	d.Raw = truncateRaw(r.raw)
 	if d.Verdict == model.VerdictUnknown {
 		return
 	}
@@ -356,4 +373,16 @@ func toUnicode(ascii string) string {
 		return ""
 	}
 	return out
+}
+
+// maxRawPreview bounds the upstream payload kept on a result.
+const maxRawPreview = 16 << 10
+
+// truncateRaw caps the payload so one huge response cannot bloat a cached
+// entry or a JSON body.
+func truncateRaw(raw string) string {
+	if len(raw) <= maxRawPreview {
+		return raw
+	}
+	return raw[:maxRawPreview]
 }

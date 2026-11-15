@@ -3,6 +3,46 @@
 All notable changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] — 2025-11-15
+
+Hardening pass over the v1.0.0 release. Everything here came from running the
+binary and reading its own output, not from re-reading the code.
+
+### Fixed
+
+- **Cache hit/miss counters were never incremented.** `bumpHit`/`bumpMiss`
+  existed but nothing called them, so `GET /api/v1/status` reported `hits: 0`
+  forever, even on a fully warm cache — the one signal an operator uses to
+  confirm caching works was dead. `Get` now counts both, `Peek` covers the
+  singleflight re-check so de-duplication does not double every miss, and stale
+  serves are counted separately.
+- **A subdomain lookup could poison the parent's cached verdict.** The
+  "a subdomain is never `available`" rewrite ran inside the engine, so it was
+  written into the entry keyed by the registrable domain. Once anyone asked for
+  `www.some-free-domain.com`, the next lookup of `some-free-domain.com` returned
+  `registered` for a name that was actually for sale. The rewrite now happens in
+  the per-request view (`present`) and never reaches storage.
+- **Batch lookups were serial.** 20 uncached domains meant 20 registry
+  round-trips end to end, so the documented cap was unusable in practice. Items
+  now resolve 8 at a time; a 4-domain batch dropped from ~2.4 s to 0.6 s against
+  live registries.
+- **The rate limiter was not sharded.** The comment claimed a sharded map with
+  per-bucket locks; the code took one global mutex for every client on every
+  request. Now genuinely sharded (16 shards, per-shard lock).
+
+### Added
+
+- **`?raw=1`** returns the upstream payload that produced the verdict (WHOIS
+  text or RDAP JSON), capped at 16 KiB. Never written to the cache: a cached
+  answer explains the empty field in `meta.warnings` instead of looking like a
+  silent registry. When the winning channel has no payload (RDAP 404 with an
+  empty body), the sibling channel's payload is used.
+- **UI: copy JSON and view raw response** buttons on every result, in both
+  themes. The raw view is only offered for fresh answers, since cached ones have
+  no payload to show.
+- Regression tests for all of the above, including one that fails if the
+  subdomain rewrite ever moves back into the engine.
+
 ## [1.0.0] — 2025-11-15
 
 First release.

@@ -242,3 +242,35 @@ func TestInvalidDomainRejectedBeforeAnyWork(t *testing.T) {
 		t.Fatalf("upstream called %d times for invalid input", got)
 	}
 }
+
+// Cache metrics are the only signal an operator has that caching works at all.
+// Get() used to have no hit/miss counters wired up, so /api/v1/status always
+// reported zero hits even on a fully warm cache.
+func TestCacheMetricsReflectHitsAndStaleServing(t *testing.T) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+		return &model.Domain{Verdict: model.VerdictRegistered, Registrar: "R"}, nil, nil
+	}}
+	svc := newTestService(t, fake, 40*time.Millisecond, 40*time.Millisecond, time.Hour)
+
+	if _, err := svc.Lookup(context.Background(), "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Lookup(context.Background(), "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, metrics := svc.Stats(); metrics.Hits < 1 {
+		t.Fatalf("hits = %d after a warm lookup, want >= 1", metrics.Hits)
+	}
+
+	time.Sleep(80 * time.Millisecond) // entry is now stale, still servable
+	res, err := svc.Lookup(context.Background(), "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Meta.Stale {
+		t.Fatal("expected a stale-while-revalidate response")
+	}
+	if _, metrics := svc.Stats(); metrics.StaleHits < 1 {
+		t.Fatalf("stale_hits = %d, want >= 1", metrics.StaleHits)
+	}
+}

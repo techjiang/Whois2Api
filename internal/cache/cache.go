@@ -141,8 +141,15 @@ type Envelope struct {
 // Path returns the database file path.
 func (c *Cache) Path() string { return c.db.Path() }
 
-// Get returns the stored entry for key, or ErrMiss.
-func (c *Cache) Get(key string) (*Entry, error) {
+// Peek reads an entry without touching the hit/miss counters. It exists for
+// the singleflight re-check: that read is a de-duplication guard, not a cache
+// hit for the caller, and counting it would double every miss.
+func (c *Cache) Peek(key string) (*Entry, error) { return c.get(key, false) }
+
+// Get returns the stored entry for key, or ErrMiss, counting the read.
+func (c *Cache) Get(key string) (*Entry, error) { return c.get(key, true) }
+
+func (c *Cache) get(key string, count bool) (*Entry, error) {
 	c.mu.RLock()
 	closed := c.closed
 	c.mu.RUnlock()
@@ -160,13 +167,25 @@ func (c *Cache) Get(key string) (*Entry, error) {
 		return nil
 	})
 	if err != nil {
+		if count && errors.Is(err, ErrMiss) {
+			c.bumpMiss()
+		}
 		return nil, err
 	}
 	var entry Entry
 	if err := json.Unmarshal(raw, &entry); err != nil {
 		// A corrupt entry is treated as a miss, never a hard failure.
 		_ = c.Delete(key)
+		if count {
+			c.bumpMiss()
+		}
 		return nil, ErrMiss
+	}
+	// Hit means "the store had the key", not "the answer is fresh": freshness
+	// is the caller's decision, and it still avoids an upstream query either
+	// way. StaleHits is counted separately by the service layer.
+	if count {
+		c.bumpHit()
 	}
 	return &entry, nil
 }
@@ -279,7 +298,10 @@ func (c *Cache) Stats() Metrics {
 func (c *Cache) bumpHit()   { c.mu.Lock(); c.metrics.Hits++; c.mu.Unlock() }
 func (c *Cache) bumpMiss()  { c.mu.Lock(); c.metrics.Misses++; c.mu.Unlock() }
 func (c *Cache) bumpStale() { c.mu.Lock(); c.metrics.StaleHits++; c.mu.Unlock() }
-func (c *Cache) bumpError() { c.mu.Lock(); c.metrics.Errors++; c.mu.Unlock() }
+
+// CountStale records that an expired entry was served while a refresh ran.
+func (c *Cache) CountStale() { c.bumpStale() }
+func (c *Cache) bumpError()  { c.mu.Lock(); c.metrics.Errors++; c.mu.Unlock() }
 
 // rawPut writes bytes without encoding, for tests that need to inject corrupt
 // data and verify the store degrades to a miss instead of failing.

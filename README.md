@@ -193,13 +193,30 @@ curl -s -X POST "http://localhost:8080/api/v1/batch" \
 ```
 
 Batch cap defaults to 20 (`W2A_MAX_BATCH`). Per-item errors do not fail the
-request.
+request, results come back in the order you sent them, and items are resolved
+concurrently (8 at a time) — a batch of 20 uncached domains costs roughly one
+registry round-trip, not twenty.
+
+### Seeing the raw registry answer
+
+Add `?raw=1` to get the upstream payload that produced the verdict — the actual
+WHOIS text or RDAP JSON. It is off by default because it triples the response
+size and nobody reading a verdict wants a legal footer.
+
+```bash
+curl -s "http://localhost:8080/api/v1/domain/example.com?raw=1" | jq -r '.domain.raw'
+```
+
+Raw payloads are never written to the cache — that would multiply every entry's
+size for a field almost nobody asks for. A cached answer therefore says so in
+`meta.warnings` and points at the fix: add `&fresh=1` to bypass the cache and
+ask the registry again.
 
 ### Other endpoints
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/v1/status` | Version, uptime, TLD coverage, cache counters |
+| `GET /api/v1/status` | Version, uptime, TLD coverage, live cache hit/miss counters |
 | `GET /api/v1/health` | Liveness; never requires auth |
 | `GET /api/v1/tlds` | Every supported TLD |
 
@@ -301,7 +318,7 @@ The interesting tests are behavioural, not line-coverage exercises:
 - `scripts/smoke.sh` asserts the deployed contract end to end
 
 ```bash
-go test ./...              # 53 test functions, ~2s
+go test ./...              # 70 test functions, ~3s
 bash scripts/smoke.sh      # full-stack smoke test
 ```
 

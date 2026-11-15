@@ -7,6 +7,10 @@
   var output = document.getElementById('output');
   var versionEl = document.getElementById('version');
   var abort = null;
+  // Last successful payload, so the "Copy JSON" and raw-payload actions do not
+  // re-run the lookup.
+  var lastResult = null;
+  var lastName = '';
 
   // Fill in the host in the documentation examples.
   Array.prototype.forEach.call(document.querySelectorAll('.host'), function (el) {
@@ -29,17 +33,27 @@
   function lookup(name) {
     if (abort) abort.abort();
     abort = new AbortController();
+    lastResult = null;
+    lastName = name;
 
     output.innerHTML = '';
     output.appendChild(statusCard(name));
 
-    fetch('/api/v1/domain/' + encodeURIComponent(name), { signal: abort.signal })
+    // ?raw=1 costs nothing extra when the answer is fresh (same request, one
+    // more field), so a cold lookup can show its payload with no second
+    // round-trip. Cached answers come back without it, and the raw button then
+    // re-queries with ?fresh=1.
+    fetch('/api/v1/domain/' + encodeURIComponent(name) + '?raw=1', { signal: abort.signal })
       .then(function (res) {
         return res.json().then(function (body) { return { status: res.status, body: body }; });
       })
       .then(function (result) {
-        if (result.status === 200) render(result.body);
-        else renderError(result.body, name);
+        if (result.status === 200) {
+          lastResult = result.body;
+          render(result.body);
+        } else {
+          renderError(result.body, name);
+        }
       })
       .catch(function (err) {
         if (err.name === 'AbortError') return;
@@ -163,10 +177,113 @@
         return c.channel + ' ' + c.ms + 'ms' + (c.ok ? '' : ' ✕');
       }).join(' · ')));
     }
-    (meta.warnings || []).forEach(function (w) { metaLine.appendChild(el('div', null, w)); });
+    (meta.warnings || []).forEach(function (w) {
+      // The "cached answers carry no raw payload" note is for API clients. The
+      // raw button below already says the same thing, so repeating it as a
+      // warning just adds noise to a perfectly fine answer.
+      if (w.indexOf('?fresh=1') !== -1) return;
+      metaLine.appendChild(el('div', null, w));
+    });
     card.appendChild(metaLine);
+    card.appendChild(actions(result));
 
     output.appendChild(card);
+  }
+
+  // actions renders the per-result toolbar: copy the JSON, or expand the raw
+  // upstream payload that produced the verdict.
+  function actions(result) {
+    var bar = el('div', 'actions');
+
+    var copy = el('button', 'ghost', 'Copy JSON');
+    copy.type = 'button';
+    copy.addEventListener('click', function () {
+      // Copy the answer without the raw dump: people pasting a verdict into a
+      // bug report want the structured part.
+      var clone = JSON.parse(JSON.stringify(result));
+      if (clone.domain) delete clone.domain.raw;
+      var text = JSON.stringify(clone, null, 2);
+      var ok = function () {
+        copy.textContent = 'Copied';
+        setTimeout(function () { copy.textContent = 'Copy JSON'; }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text, ok); });
+      } else {
+        fallbackCopy(text, ok);
+      }
+    });
+    bar.appendChild(copy);
+
+    var raw = (result.domain && result.domain.raw) || '';
+    var rawBtn = el('button', 'ghost', raw ? 'Raw response' : 'Raw response (re-query)');
+    rawBtn.type = 'button';
+    if (!raw) {
+      rawBtn.title = 'Cached answers carry no upstream payload; this asks the registry again.';
+    }
+    rawBtn.addEventListener('click', function () {
+      if (raw) {
+        var open = toggleRaw(raw, (result.domain && result.domain.source) || 'upstream');
+        rawBtn.textContent = open ? 'Hide raw' : 'Raw response';
+        return;
+      }
+      rawBtn.disabled = true;
+      rawBtn.textContent = 'Fetching…';
+      // fresh=1 forces a registry round-trip: a cached entry has no payload,
+      // and silently returning an empty one would look like a silent registry.
+      fetch('/api/v1/domain/' + encodeURIComponent(lastName) + '?raw=1&fresh=1')
+        .then(function (r) { return r.json(); })
+        .then(function (body) {
+          var payload = (body.domain && body.domain.raw) || '';
+          if (!payload) {
+            rawBtn.textContent = 'Raw unavailable';
+            return;
+          }
+          raw = payload;
+          toggleRaw(payload, (body.domain && body.domain.source) || 'upstream');
+          rawBtn.disabled = false;
+          rawBtn.textContent = 'Hide raw';
+        })
+        .catch(function () {
+          rawBtn.disabled = false;
+          rawBtn.textContent = 'Raw response (re-query)';
+        });
+    });
+    bar.appendChild(rawBtn);
+
+    return bar;
+  }
+
+  // toggleRaw shows the payload in place, under the card it belongs to.
+  // It returns the resulting open state.
+  function toggleRaw(raw, source) {
+    var card = output.querySelector('.card');
+    if (!card) return false;
+    var existing = card.querySelector('details.raw');
+    if (existing) {
+      existing.open = !existing.open;
+      return existing.open;
+    }
+    var details = el('details', 'raw');
+    details.open = true;
+    details.appendChild(el('summary', null, 'Raw ' + source + ' response'));
+    var pre = el('pre');
+    pre.textContent = raw;
+    details.appendChild(pre);
+    card.appendChild(details);
+    return true;
+  }
+
+  function fallbackCopy(text, done) {
+    var ta = el('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
   }
 
   function verdictPill(status) {
@@ -202,6 +319,15 @@
     if (cls) node.className = cls;
     if (text !== undefined && text !== null) node.textContent = text;
     return node;
+  }
+
+  // Deep links: /?d=example.com or /#example.com opens straight on a lookup, so
+  // a shared link shows the same answer instead of an empty form.
+  var deepLink = new URLSearchParams(location.search).get('d') ||
+    decodeURIComponent(location.hash.replace(/^#/, ''));
+  if (deepLink) {
+    input.value = deepLink;
+    lookup(deepLink);
   }
 
   // Show the deployed version in the footer.

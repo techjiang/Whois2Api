@@ -59,6 +59,18 @@ var ErrNoAnswer = errors.New("no authoritative answer available")
 //     registry.
 //   - Otherwise: live lookup, collapsing concurrent duplicates.
 func (s *Service) Lookup(ctx context.Context, input string) (*ServiceResult, error) {
+	return s.lookup(ctx, input, false)
+}
+
+// LookupFresh resolves a domain while ignoring any cached entry, then stores
+// the result as usual. Callers use it when they need facts a cache entry does
+// not carry (the raw upstream payload) or when they suspect the cached answer
+// is out of date.
+func (s *Service) LookupFresh(ctx context.Context, input string) (*ServiceResult, error) {
+	return s.lookup(ctx, input, true)
+}
+
+func (s *Service) lookup(ctx context.Context, input string, bypassCache bool) (*ServiceResult, error) {
 	target, err := s.engine.Prepare(input)
 	if err != nil {
 		return nil, err
@@ -66,7 +78,9 @@ func (s *Service) Lookup(ctx context.Context, input string) (*ServiceResult, err
 	key := cacheKey(target)
 	now := time.Now().UTC()
 
-	if entry, ok := s.cachedEntry(key); ok {
+	// A bypassing caller still joins an in-flight group below, so "refresh"
+	// cannot turn into a stampede on a shared key.
+	if entry, ok := s.cachedEntry(key); ok && !bypassCache {
 		if entry.Fresh(now) {
 			return &ServiceResult{
 				Domain: present(entry.Domain, target),
@@ -78,6 +92,7 @@ func (s *Service) Lookup(ctx context.Context, input string) (*ServiceResult, err
 			}, nil
 		}
 		if s.withinStale(entry, now) {
+			s.cache.CountStale()
 			s.triggerRefresh(key, target)
 			return &ServiceResult{
 				Domain: present(entry.Domain, target),
@@ -96,7 +111,10 @@ func (s *Service) Lookup(ctx context.Context, input string) (*ServiceResult, err
 	// every caller waiting on this key, so it is never mutated in place: each
 	// caller gets present()'s deep copy.
 	value, err, _ := s.group.Do(key, func() (any, error) {
-		if entry, ok := s.cachedEntry(key); ok && entry.Fresh(time.Now().UTC()) {
+		// Re-check inside the group in case a sibling just filled the entry.
+		// Peek keeps this out of the hit/miss counters: it is a de-duplication
+		// guard, not this caller's cache read.
+		if entry, err := s.cache.Peek(key); err == nil && entry.Fresh(time.Now().UTC()) && !bypassCache {
 			return &cache.Envelope{Domain: entry.Domain}, nil
 		}
 		start := time.Now()

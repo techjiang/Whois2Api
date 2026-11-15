@@ -197,3 +197,43 @@ func TestDataDirPermissions(t *testing.T) {
 		t.Fatalf("database file permissions too open: %o", perm)
 	}
 }
+
+func TestMetricsCountHitsAndMisses(t *testing.T) {
+	c := openTestCache(t, Options{})
+	if err := c.Put("k", sampleDomain(model.VerdictRegistered), model.SourceRDAP); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if _, err := c.Get("k"); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if _, err := c.Get("absent"); !errors.Is(err, ErrMiss) {
+		t.Fatalf("error = %v, want ErrMiss", err)
+	}
+	m := c.Stats()
+	if m.Hits != 1 {
+		t.Errorf("hits = %d, want 1", m.Hits)
+	}
+	if m.Misses != 1 {
+		t.Errorf("misses = %d, want 1", m.Misses)
+	}
+	if m.Writes != 1 {
+		t.Errorf("writes = %d, want 1", m.Writes)
+	}
+}
+
+func TestCorruptEntryCountsAsMiss(t *testing.T) {
+	c := openTestCache(t, Options{})
+	if err := c.rawPut("k", []byte("{not json")); err != nil {
+		t.Fatalf("rawPut: %v", err)
+	}
+	if _, err := c.Get("k"); !errors.Is(err, ErrMiss) {
+		t.Fatalf("error = %v, want ErrMiss", err)
+	}
+	if m := c.Stats(); m.Misses != 1 || m.Hits != 0 {
+		t.Errorf("metrics = hits %d / misses %d, want 0/1", m.Hits, m.Misses)
+	}
+	// A corrupt entry must be evicted, not served forever.
+	if _, err := c.Get("k"); !errors.Is(err, ErrMiss) {
+		t.Fatalf("after corruption, error = %v, want ErrMiss", err)
+	}
+}
