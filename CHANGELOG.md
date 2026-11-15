@@ -56,6 +56,14 @@ the same question, not by reading the code.
   probed (`DNS 解析（iana.org）`), because the answer is about the registrable
   domain, not the name in the title.
 
+### Fixed (tests)
+
+- **A data race in the API test fake.** `fakeUpstream.calls` was a plain `int`
+  incremented from every batch goroutine. `go test -race` had never actually run
+  on this project — the earlier note about a missing C toolchain was accurate at
+  the time, and it hid this. The counter is atomic now, and `-race` is green on
+  the whole tree.
+
 ### Added
 
 - Tests for the invariants these bugs violated: cold and warm answers to the

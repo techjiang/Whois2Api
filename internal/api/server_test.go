@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func newTestServer(t *testing.T, cfg config.Config) (*Server, *fakeUpstream) {
 
 // fakeUpstream answers deterministically without touching the network.
 type fakeUpstream struct {
-	calls int
+	callCount atomic.Int64
 	// delay slows every answer so concurrency is observable.
 	delay time.Duration
 	// raw is attached to results, mimicking an upstream payload.
@@ -66,7 +67,10 @@ type fakeUpstream struct {
 }
 
 func (f *fakeUpstream) lookup(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
-	f.calls++
+	// Batch handlers call this from several goroutines at once, so the counter
+	// has to be atomic. It was a plain int until a -race run pointed at it: the
+	// tests looked fine because nothing asserted on the value.
+	f.callCount.Add(1)
 	if f.delay > 0 {
 		select {
 		case <-time.After(f.delay):
