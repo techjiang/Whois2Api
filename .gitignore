@@ -1,4 +1,6 @@
 # Build output: only the binary at the repository root, never the source tree.
+# release/ IS committed on purpose: it carries the release notes and checksums
+# for the published version, so the repo shows what was actually shipped.
 /bin/
 /dist/
 /whois2api
