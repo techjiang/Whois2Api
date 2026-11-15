@@ -6,7 +6,7 @@ All notable changes are recorded here. This project follows
 ## [1.3.0] — 2025-11-15
 
 Release build. Everything here was found by querying the running binary against
-live registries, not by reading the code — and two of the four were verdict
+live registries, not by reading the code — and two of them were verdict
 errors, the category this project exists to eliminate.
 
 ### Fixed
@@ -31,6 +31,17 @@ errors, the category this project exists to eliminate.
   (`W2A_CORS_ORIGINS`), off by default so a private install cannot be read by
   every page a visitor has open, and preflight is answered for allowed origins.
 
+- **Upgrading the binary did not upgrade the UI.** `/static/app.js` was served
+  with `max-age=86400` and a fixed name, so replacing the binary left every
+  returning browser running the previous version's JavaScript for up to a day —
+  the server was upgraded, the page was not, and nothing said so. Assets are now
+  fingerprinted: the HTML references `/static/app.js?v=<hash of all assets>`, so
+  a new binary means new URLs. Fingerprinted URLs are immutable for a year,
+  unversioned ones must revalidate (`max-age=0, must-revalidate`), every asset
+  carries an `ETag` and answers `304`, and the HTML itself is `no-cache` so the
+  reference cannot go stale. The `/favicon.ico` redirect carries the fingerprint
+  too, since browsers cache a 301 for a long time.
+
 ### Changed
 
 - **The Go module path is `github.com/techjiang/Whois2Api`**, matching where the
@@ -42,9 +53,11 @@ errors, the category this project exists to eliminate.
   its assets stay same-origin. `Access-Control-Allow-Credentials` is never sent:
   this API authenticates with a bearer token, not cookies.
 - Notice code `private_suffix_delegated`, with translations in both UI languages.
-- Regression tests for all four: the private-suffix verdict on cold and warm
-  answers, the underscore rejection, CORS off-by-default, and an allowed-origin
-  preflight that must be answered rather than 405.
+- Regression tests for all of it: the private-suffix verdict on cold and warm
+  answers, the underscore rejection, CORS off-by-default, an allowed-origin
+  preflight that must be answered rather than 405, and a cache test asserting
+  fingerprinted assets are immutable, unversioned ones revalidate, and
+  conditional requests return 304.
 
 ### Verified
 

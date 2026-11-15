@@ -569,3 +569,61 @@ func TestPrivateSuffixVerdictIsUnknown(t *testing.T) {
 		t.Errorf("alerts = %+v, want %q", body.Domain.Alerts, model.NoticePrivateSuffix.Code)
 	}
 }
+
+// A browser caches /static/app.js by name. With a day-long max-age and no
+// fingerprint, replacing the binary kept serving the old UI from cache: the
+// server was upgraded and the page was not, silently. The HTML now references
+// fingerprinted URLs, so a new binary means new URLs.
+func TestStaticAssetsAreFingerprinted(t *testing.T) {
+	s, _ := newTestServer(t, config.Config{})
+	rec := doRequest(t, s, http.MethodGet, "/", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("index status = %d", rec.Code)
+	}
+	page := rec.Body.String()
+	if strings.Contains(page, assetVersionPlaceholder) {
+		t.Fatalf("index still contains the %s placeholder", assetVersionPlaceholder)
+	}
+	if !strings.Contains(page, "/static/app.js?v="+assetVersion) {
+		t.Error("index does not reference a fingerprinted app.js")
+	}
+	if !strings.Contains(page, "/static/i18n.js?v="+assetVersion) {
+		t.Error("index does not reference a fingerprinted i18n.js")
+	}
+	// The HTML itself must never be cached, or the fingerprint goes stale.
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("index Cache-Control = %q, want no-cache", got)
+	}
+
+	// A fingerprinted asset may be cached forever.
+	fp := doRequest(t, s, http.MethodGet, "/static/app.js?v="+assetVersion, "", nil)
+	if fp.Code != http.StatusOK {
+		t.Fatalf("fingerprinted asset status = %d", fp.Code)
+	}
+	if got := fp.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
+		t.Errorf("fingerprinted Cache-Control = %q, want immutable", got)
+	}
+	if fp.Header().Get("ETag") == "" {
+		t.Error("static asset has no ETag")
+	}
+
+	// An unversioned URL (typed by hand, or an old page) must revalidate so it
+	// can never pin a stale file.
+	plain := doRequest(t, s, http.MethodGet, "/static/app.js", "", nil)
+	if got := plain.Header().Get("Cache-Control"); !strings.Contains(got, "must-revalidate") {
+		t.Errorf("unversioned Cache-Control = %q, want must-revalidate", got)
+	}
+	// Revalidation must actually work, not just be advertised.
+	etag := plain.Header().Get("ETag")
+	again := doRequest(t, s, http.MethodGet, "/static/app.js", "", map[string]string{"If-None-Match": etag})
+	if again.Code != http.StatusNotModified {
+		t.Errorf("conditional request status = %d, want 304", again.Code)
+	}
+
+	// The favicon redirect has to carry the fingerprint too: a 301 is cached
+	// for a long time, so an unversioned target pins the old icon.
+	fav := doRequest(t, s, http.MethodGet, "/favicon.ico", "", nil)
+	if loc := fav.Header().Get("Location"); !strings.Contains(loc, "?v="+assetVersion) {
+		t.Errorf("favicon redirect = %q, want a fingerprinted target", loc)
+	}
+}

@@ -66,7 +66,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /{$}", s.handleIndex)
 	mux.HandleFunc("GET /static/", s.handleStatic)
 	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/static/favicon-32.png", http.StatusMovedPermanently)
+		// The favicon URL carries the asset fingerprint too: a 301 is cached by
+		// browsers for a long time, and an unversioned target would pin the old
+		// icon across upgrades.
+		http.Redirect(w, r, "/static/favicon-32.png?v="+assetVersion, http.StatusMovedPermanently)
 	})
 
 	// Friendly errors for wrong methods on known paths.

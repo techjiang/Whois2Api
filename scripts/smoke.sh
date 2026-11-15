@@ -152,6 +152,17 @@ curl -s -D - -o /dev/null -m 5 -H 'Origin: https://evil.example' "$BASE/api/v1/d
   | grep -qi 'Access-Control-Allow-Origin' && fail "CORS leaked to an unconfigured origin"
 pass "CORS is closed by default"
 
+# Replacing the binary has to replace the UI. A fixed asset name with a day-long
+# max-age left returning browsers running the previous version's JavaScript,
+# silently. The HTML must reference fingerprinted asset URLs.
+page=$(curl -fsS -m 5 "$BASE/")
+printf '%s' "$page" | grep -q '__ASSET_VERSION__' && fail "index still carries the unfilled asset placeholder"
+printf '%s' "$page" | grep -qE '/static/app\.js\?v=[a-f0-9]{12}' || fail "index does not reference a fingerprinted app.js"
+asset=$(printf '%s' "$page" | grep -oE '/static/app\.js\?v=[a-f0-9]{12}' | head -1)
+curl -sI -m 5 "$BASE$asset" | grep -qi 'immutable' || fail "fingerprinted asset is not immutable"
+curl -sI -m 5 "$BASE/static/app.js" | grep -qi 'must-revalidate' || fail "unversioned asset is not revalidated"
+pass "static assets are fingerprinted and revalidated"
+
 # Graceful shutdown: the process must exit 0 and leave a valid database.
 kill -TERM "$PID"
 for _ in $(seq 1 40); do
