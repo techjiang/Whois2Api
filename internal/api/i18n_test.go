@@ -131,3 +131,38 @@ func TestDictionaryBlocksAreNotMixed(t *testing.T) {
 		t.Error("Chinese dictionary contains no CJK text at all; did the keys get swapped?")
 	}
 }
+
+// The raw-payload panel interpolates a channel name into a sentence
+// ("Raw {source} response"). That placeholder must receive a translated token:
+// passing the raw `whois`/`rdap` identifier through produced "原始 upstream 响应"
+// in the Chinese UI — half a sentence in the wrong language, in a card that was
+// otherwise fully Chinese.
+func TestChannelNamesAreTranslated(t *testing.T) {
+	raw, err := fs.ReadFile(assetFS, "i18n.js")
+	if err != nil {
+		t.Fatalf("read i18n.js: %v", err)
+	}
+	sources := []string{
+		string(model.SourceRDAP), string(model.SourceWhoIs),
+		string(model.SourceCache), "upstream", "none",
+	}
+	for _, src := range sources {
+		key := regexp.MustCompile(`'source\.` + regexp.QuoteMeta(src) + `':`)
+		if got := len(key.FindAllStringIndex(string(raw), -1)); got < 2 {
+			t.Errorf("channel %q is translated %d time(s) in web/i18n.js, want at least 2 (en + zh)", src, got)
+		}
+	}
+}
+
+// The DNS probe measures the registrable domain, so a subdomain card must name
+// that domain next to the answer. Otherwise "DNS resolves: no" under a
+// subdomain heading reads as a claim about the subdomain.
+func TestSubdomainDNSCaveatIsLabelled(t *testing.T) {
+	raw, err := fs.ReadFile(assetFS, "i18n.js")
+	if err != nil {
+		t.Fatalf("read i18n.js: %v", err)
+	}
+	if got := regexp.MustCompile(`'field\.dns_of':`).FindAllStringIndex(string(raw), -1); len(got) < 2 {
+		t.Fatalf("field.dns_of is translated %d time(s), want at least 2", len(got))
+	}
+}

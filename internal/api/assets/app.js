@@ -148,14 +148,18 @@
       ['field.expires', expiry(d.expires_at, d.days_until_expiry)],
       ['field.dnssec', d.dnssec],
       ['field.suffix', d.suffix],
-      ['field.dns', d.dns_resolves === undefined ? '' : (d.dns_resolves ? T.t('value.yes') : T.t('value.no'))],
+      [d.subdomain_of ? 'field.dns_of' : 'field.dns',
+        d.dns_resolves === undefined ? '' : (d.dns_resolves ? T.t('value.yes') : T.t('value.no'))],
       ['field.source', d.source]
     ];
 
     var dl = el('dl', 'fields');
     fields.forEach(function (pair) {
       if (!pair[1]) return;
-      dl.appendChild(el('dt', null, T.t(pair[0])));
+      // field.dns_of names the domain the probe actually measured, because on a
+      // subdomain card the answer is about the registrable domain, not the name
+      // in the title.
+      dl.appendChild(el('dt', null, T.t(pair[0], { d: d.subdomain_of || '' })));
       var dd = el('dd');
       if (pair[0] === 'field.registrar' && d.registrar_url) {
         var a = el('a', null, pair[1]);
@@ -292,7 +296,7 @@
     // second time would look like the first fetch had failed.
     if (!lastRaw && result.domain && result.domain.raw) {
       lastRaw = result.domain.raw;
-      lastRawSource = result.domain.source || 'upstream';
+      lastRawSource = result.domain.source || 'none';
     }
     var raw = lastRaw;
     var rawBtn = el('button', 'ghost', raw ? T.t('action.raw') : T.t('action.rawRequery'));
@@ -319,7 +323,7 @@
             return;
           }
           lastRaw = payload;
-          lastRawSource = (body.domain && body.domain.source) || 'upstream';
+          lastRawSource = (body.domain && body.domain.source) || 'none';
           rawVisible = true;
           showRaw(lastRaw, lastRawSource);
           rawBtn.disabled = false;
@@ -344,14 +348,22 @@
     var details = card.querySelector('details.raw');
     if (!details) {
       details = el('details', 'raw');
-      details.appendChild(el('summary', null, T.t('raw.summary', { source: source })));
+      details.appendChild(el('summary', null, T.t('raw.summary', { source: T.t('source.' + source) })));
       var pre = el('pre');
       pre.textContent = raw;
       details.appendChild(pre);
       // The summary belongs to <details>, so the browser toggles it for us.
       // Track that here, or the next re-render silently re-opens a panel the
       // reader had just closed.
-      details.addEventListener('toggle', function () { rawVisible = details.open; });
+      //
+      // toggle is dispatched as a queued task, so a panel torn down by
+      // innerHTML = '' reports open: false *after* the replacement card is
+      // already built — and would slam the state shut on a panel the reader is
+      // looking at. A detached element's opinion no longer counts.
+      details.addEventListener('toggle', function () {
+        if (!details.isConnected) return;
+        rawVisible = details.open;
+      });
       card.appendChild(details);
     }
     details.open = rawVisible;

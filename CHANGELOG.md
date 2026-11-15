@@ -41,6 +41,21 @@ the same question, not by reading the code.
   were by definition not served from cache. Three forced refreshes showed three
   hits.
 
+### Fixed (UI)
+
+- **Switching language threw away the raw-payload panel.** The card is rebuilt
+  on a language switch, which dropped the panel the reader had opened; the
+  button then offered to fetch it again from a registry we had already asked.
+  The payload and its open state now live outside the DOM and are restored.
+  Collapsing the panel by hand is remembered too — `toggle` is dispatched as a
+  queued task, so a panel torn down by the rebuild reported `open: false` after
+  the new card was already built and slammed the state shut.
+- **"原始 upstream 响应"** — the channel name was interpolated raw. Channel names
+  are now dictionary keys, and a test fails if any of them is missing.
+- **`DNS 解析` on a subdomain card** now names the domain that was actually
+  probed (`DNS 解析（iana.org）`), because the answer is about the registrable
+  domain, not the name in the title.
+
 ### Added
 
 - Tests for the invariants these bugs violated: cold and warm answers to the
