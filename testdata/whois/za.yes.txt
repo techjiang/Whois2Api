@@ -1,0 +1,86 @@
+<pre>
+Domain Name: co.za
+Domain ID: dom_3P--1
+WHOIS Server: za-whois31.dns.net.za
+
+Updated Date: 2019-09-04T08:31:30Z
+Creation Date: 2017-06-15T07:33:10Z
+Registry Expiry Date: 2999-12-30T22:00:00Z
+Sponsoring Registrar: .ZADNA
+Domain Status: ok https://icann.org/epp#ok
+
+Registrant ID: ZACR
+Registrant Name: Lucky Masilela
+Registrant Organization: ZACR
+Registrant Street: COZA House Corporate Park South 
+Registrant City: Midrand
+Registrant State/Province: Gauteng
+Registrant Postal Code: 1685
+Registrant Country: ZA
+Registrant Phone: +27.11314 0077
+Registrant Phone Ext: 
+Registrant Fax: +27.113140088
+Registrant Fax Ext: 
+Registrant Email: zadna@registry.net.za
+
+Admin ID: ZACR
+Admin Name: Lucky Masilela
+Admin Organization: ZACR
+Admin Street: COZA House Corporate Park South 
+Admin City: Midrand
+Admin State/Province: Gauteng
+Admin Postal Code: 1685
+Admin Country: ZA
+Admin Phone: +27.11314 0077
+Admin Phone Ext: 
+Admin Fax: +27.113140088
+Admin Fax Ext: 
+Admin Email: zadna@registry.net.za
+
+Billing ID: ZACR
+Billing Name: Lucky Masilela
+Billing Organization: ZACR
+Billing Street: COZA House Corporate Park South 
+Billing City: Midrand
+Billing State/Province: Gauteng
+Billing Postal Code: 1685
+Billing Country: ZA
+Billing Phone: +27.11314 0077
+Billing Phone Ext: 
+Billing Fax: +27.113140088
+Billing Fax Ext: 
+Billing Email: zadna@registry.net.za
+
+Tech ID: DNS
+Tech Name: DNS
+Tech Organization: DNS
+Tech Street: COZA HOUSE  
+Tech City: Midrand
+Tech State/Province: Gauteng
+Tech Postal Code: 1685
+Tech Country: ZA
+Tech Phone: +27.115682800
+Tech Phone Ext: 
+Tech Fax: +27.115682800
+Tech Fax Ext: 
+Tech Email: zadna-support@dnservices.co.za
+
+
+Name Server: coza1.dnsnode.net
+Name Server: ns2us.dns.business
+Name Server: ns2.dns.net.za
+Name Server: ns.coza.net.za
+Name Server: ns5.dns.net.za
+DNSSEC: signedDelegation
+>>> Last update of WHOIS database: 2026-11-15T03:22:23Z <<<
+
+#    WHOIS lookup made at 2026-11-15T03:22:23Z
+# --
+# For more information on Whois status codes, please visit https://icann.org/epp
+#
+# The use of this Whois facility is subject to the following terms and
+# conditions. https://registry.net.za/whois_terms
+# Copyright (c) ZACR 1995-2026
+
+</pre>
+

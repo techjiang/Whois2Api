@@ -1,0 +1,8 @@
+Domain ID: 328686_DOMAIN_ID-ID
+Domain Name: NIC.ID
+Created On: 2014-08-16T04:40:01Z
+Status: RESERVED
+DNSSEC: unsigned
+URL of the ICANN Whois Inaccuracy Complaint Form: https://www.icann.org/wicf/
+>>> Last update of WHOIS database: 2026-11-15T03:03:08Z <<<
+

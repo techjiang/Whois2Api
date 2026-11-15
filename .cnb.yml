@@ -1,0 +1,35 @@
+# CNB pipeline: test on every push, build and publish on tags.
+main:
+  push:
+    - stages:
+        - name: lint and vet
+          image: golang:1.23
+          commands:
+            - gofmt -l . | tee /tmp/unformatted
+            - test ! -s /tmp/unformatted
+            - go vet ./...
+        - name: test
+          image: golang:1.23
+          commands:
+            - go test -race -coverprofile=coverage.out ./...
+            - go tool cover -func=coverage.out | tail -1
+        - name: build
+          image: golang:1.23
+          commands:
+            - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o whois2api ./cmd/whois2api
+            - ./whois2api version
+
+  tag_push:
+    - stages:
+        - name: build and smoke
+          image: golang:1.23
+          commands:
+            - go test ./...
+            - make build
+            - bash scripts/smoke.sh
+
+        - name: docker build
+          image: docker:cli
+          commands:
+            - docker build -t "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:${CNB_TAG_NAME}" .
+            - docker push "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:${CNB_TAG_NAME}"

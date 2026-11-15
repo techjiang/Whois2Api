@@ -1,0 +1,20 @@
+# Build output: only the binary at the repository root, never the source tree.
+/bin/
+/dist/
+/whois2api
+
+# Runtime data: the cache database and logs must never be committed.
+/data/
+*.db
+*.db.lock
+*.log
+
+# Local editor/OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Test artifacts
+coverage.out
+coverage.html

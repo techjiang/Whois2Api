@@ -1,0 +1,23 @@
+** Domain Name: google.com.tr
+Domain Status: Active
+Frozen Status: -
+Transfer Status: The domain is LOCKED to transfer.
+
+** Registrant:
+Google LLC
+Hidden upon user request
+
+** Administrative Contact:
+Hidden upon user request
+
+** Technical Contact:
+Hidden upon user request
+
+** Registrar:
+MarkMonitor Inc.
+
+** Name Servers:
+ns1.google.com
+ns2.google.com
+ns3.google.com
+ns4.google.com

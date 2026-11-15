@@ -1,0 +1,30 @@
+Domain Name: twnic.tw
+ This domain name is Green Domain Name Verified.
+ 本網域名稱已通過.tw綠色域名認證
+   Domain Status: serverTransferProhibited,serverDeleteProhibited,serverUpdateProhibited
+   Registrant:
+      財團法人台灣網路資訊中心
+      Taiwan Network Information Center
+      TWNIC  tech@twnic.tw
+      +886.225289696
+      +886.225287756
+      3F., No. 123, Sec. 4, Bade Rd., Songshan Dist. TW  
+      Taipei, 
+      TW
+
+   Administrative Contact:
+      (Redacted for privacy)
+
+   Technical Contact:
+      (Redacted for privacy)
+
+   Record expires on 2099-12-31 23:59:59 (UTC+8)
+   Record created on 2005-10-27 17:02:34 (UTC+8)
+
+   Domain servers in listed order:
+      dns2.twnic.net.tw     
+      dns1.twnic.net.tw     
+
+Registration Service Provider: TWNIC
+Registration Service URL: https://rs.twnic.tw/
+Registrar Abuse Contact Email: abuse@twnic.tw

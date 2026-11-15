@@ -1,0 +1,11 @@
+.git
+.github
+bin
+dist
+data
+*.db
+*.log
+docs
+testdata
+scripts
+web

@@ -1,0 +1,29 @@
+Domain Name: kenic.or.ke
+Registry Domain ID: 1285-Kenic
+Registrar WHOIS Server: whois.kenic.or.ke
+Registrar URL: https://registry.kenic.or.ke
+Updated Date: 2025-04-07T10:05:27Z
+Creation Date: 2003-02-12T21:00:00Z
+Registry Expiry Date: 2026-12-31T00:00:00Z
+Registrar Registration Expiration Date: 2026-12-31T00:00:00Z
+Registrar: Kenya Network Information Centre
+Registrar Street Address: Communications Authority Complex,, Waiyaki Way opp. Kianda School, P.O. Box 1461 - 00606, Nairobi
+Registrar Phone: +254 20 4450057/8
+Registrar Email: admin@kenic.or.ke
+Registrar Abuse Contact Email: abuse@kenic.or.ke
+Registrar Abuse Contact Phone: 
+Domain Status: active https://icann.org/epp#active
+Domain Status: clientRenewProhibited https://icann.org/epp#clientRenewProhibited
+Domain Status: serverRenewProhibited https://icann.org/epp#serverRenewProhibited
+Domain Status: clientTransferProhibited https://icann.org/epp#clientTransferProhibited
+Domain Status: serverTransferProhibited https://icann.org/epp#serverTransferProhibited
+Domain Status: clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited
+Domain Status: serverDeleteProhibited https://icann.org/epp#serverDeleteProhibited
+Name Server: tessa.ns.cloudflare.com
+Name Server: sage.ns.cloudflare.com
+DNSSEC: signedDelegation
+>>> Last update of WHOIS database: 2026-11-15T02:55:42.841Z <<<
+
+For more information on domain status codes, please visit https://icann.org/epp
+
+

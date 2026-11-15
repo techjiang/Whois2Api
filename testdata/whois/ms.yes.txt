@@ -1,0 +1,35 @@
+Domain Name: nic.ms
+Registry Domain ID: 8637-CoCCA
+Updated Date: 2026-03-24T16:02:26Z
+Creation Date: 1998-09-01T12:00:00Z
+Registry Expiry Date: 2099-09-01T00:00:00Z
+Registrar Registration Expiration Date: 2099-09-01T00:00:00Z
+Registrar: MNINET Registrar
+Registrar Street Address: Olveston Drive, Olveston, Montserrat
+Registrar Email: sales@mninet.ms
+Domain Status: active https://icann.org/epp#active
+Domain Status: clientTransferProhibited https://icann.org/epp#clientTransferProhibited
+Domain Status: serverTransferProhibited https://icann.org/epp#serverTransferProhibited
+Domain Status: clientDeleteProhibited https://icann.org/epp#clientDeleteProhibited
+Domain Status: serverDeleteProhibited https://icann.org/epp#serverDeleteProhibited
+Registry Registrant ID: 53629-CoCCA
+Name Server: ns51.constellix.net
+Name Server: ns21.constellix.com
+Name Server: ns31.constellix.com
+Name Server: ns61.constellix.net
+Name Server: ns11.constellix.com
+Name Server: ns41.constellix.net
+DNSSEC: unsigned
+>>> Last update of WHOIS database: 2026-11-15T03:11:18.312Z <<<
+
+For more information on domain status codes, please visit https://icann.org/epp
+
+TERMS OF USE: 
+You are not authorized to access or query our Whois database through the use of electronic processes that are high-volume and automated.  
+
+The data is for information purposes only. MNINET does not guarantee its accuracy. By submitting a Whois query, you agree to abide by the following terms of use: 
+You agree that you may use this Data only for lawful purposes and that under no circumstances will you use this Data to: 
+ (1) allow, enable, or otherwise support the transmission of mass unsolicited, commercial advertising or solicitations via e-mail, telephone, or facsimile; 
+                  or
+ (2) enable high volume, automated, electronic processes. The compilation, repackaging, dissemination or other use of this Data is expressly prohibited.
+

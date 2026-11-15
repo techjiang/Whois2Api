@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whois2Api — domain lookup</title>
+<meta name="description" content="A fast, self-hosted WHOIS/RDAP lookup API with an honest three-state verdict.">
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="brand">
+    <img src="/static/logo.svg" alt="" width="34" height="34">
+    <span>Whois2Api</span>
+  </div>
+  <nav>
+    <a href="#docs">API</a>
+    <a href="/api/v1/status" target="_blank" rel="noopener">Status</a>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <h1>Look up any domain, <em>honestly</em>.</h1>
+    <p class="lede">
+      WHOIS and RDAP queried in parallel, cached on your own disk. When a registry
+      refuses to answer, this tells you <strong>unknown</strong> — never a confident guess.
+    </p>
+    <form id="lookup" autocomplete="off">
+      <label class="sr-only" for="domain">Domain name</label>
+      <input id="domain" name="domain" type="text" placeholder="example.com"
+             spellcheck="false" autocapitalize="none" autocomplete="off" required>
+      <button type="submit">Look up</button>
+    </form>
+    <div class="examples" id="examples">
+      <button type="button" data-d="google.com">google.com</button>
+      <button type="button" data-d="github.io">github.io</button>
+      <button type="button" data-d="nic.io">nic.io</button>
+      <button type="button" data-d="中国.cn">中国.cn</button>
+    </div>
+  </section>
+
+  <section id="output" aria-live="polite"></section>
+
+  <section id="docs" class="docs">
+    <h2>Use it from the command line</h2>
+    <pre><code>curl -s "<span class="host"></span>/api/v1/domain/example.com"</code></pre>
+    <h2>Batch lookups</h2>
+    <pre><code>curl -s -X POST "<span class="host"></span>/api/v1/batch" \
+  -H 'Content-Type: application/json' \
+  -d '{"domains":["example.com","example.org"]}'</code></pre>
+    <h2>What the three verdicts mean</h2>
+    <dl class="verdicts">
+      <dt><span class="pill registered">registered</span></dt>
+      <dd>An authoritative registry returned a record for the name.</dd>
+      <dt><span class="pill available">available</span></dt>
+      <dd>A registry explicitly said the name does not exist. This is a positive
+          statement, not the absence of one.</dd>
+      <dt><span class="pill unknown">unknown</span></dt>
+      <dd>The registry was rate-limited, blocked us, timed out, or answered in a
+          dialect this build does not model. We do not guess.</dd>
+    </dl>
+  </section>
+</main>
+
+<footer class="site">
+  <span>Whois2Api</span>
+  <span id="version"></span>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

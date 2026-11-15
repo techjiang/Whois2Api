@@ -1,0 +1,9 @@
+%  https://karibu.tz/media/WHOIS_TERMS_TOU.pdf
+% 
+% Whoisd Server Version: 3.15.0
+
+%ERROR:101: no entries found
+% 
+% No entries found.
+
+

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Whois2Api">
+  <title>Whois2Api</title>
+  <defs>
+    <linearGradient id="w2a" x1="12" y1="8" x2="52" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6ea8ff"/>
+      <stop offset=".55" stop-color="#3f7bf7"/>
+      <stop offset="1" stop-color="#2a3ff0"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#w2a)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Lens ring: the lookup act. -->
+    <circle cx="27.5" cy="27.5" r="16.5" stroke-width="4"/>
+    <!-- Meridians: the globe, reduced to two strokes so it stays legible at 16px. -->
+    <path d="M27.5 11.4c4.6 4.2 7 9.6 7 16.1s-2.4 11.9-7 16.1c-4.6-4.2-7-9.6-7-16.1s2.4-11.9 7-16.1z" stroke-width="2.4"/>
+    <path d="M11.6 25.1h31.8" stroke-width="2.4"/>
+    <!-- Handle: solid, reads clearly even when scaled down. -->
+    <path d="M40.2 40.2 52.4 52.4" stroke-width="5"/>
+  </g>
+  <!-- Node dot, the "record found" beat. -->
+  <circle cx="27.5" cy="27.5" r="3.6" fill="#2a3ff0"/>
+</svg>
