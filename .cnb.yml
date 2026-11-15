@@ -21,15 +21,13 @@ main:
           script:
             - go test -race ./...
 
-        - name: build
+        # Build and smoke in one job: each job runs in its own container, so a
+        # binary built in an earlier job is not on disk here.
+        - name: build and smoke
           image: golang:1.23
           script:
-            - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o whois2api ./cmd/whois2api
-            - ./whois2api version
-
-        - name: smoke
-          image: golang:1.23
-          script:
+            - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/whois2api ./cmd/whois2api
+            - ./bin/whois2api version
             - bash scripts/smoke.sh
 
 # Tag pushes publish a container image. Kept under "$" because tag events are
@@ -39,16 +37,12 @@ $:
     - services:
         - docker
       stages:
-        - name: test
-          image: golang:1.23
-          script:
-            - go test ./...
-
         - name: build and smoke
           image: golang:1.23
           script:
+            - go test ./...
             - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/whois2api ./cmd/whois2api
-            - BIN=./bin/whois2api bash scripts/smoke.sh
+            - bash scripts/smoke.sh
 
         - name: docker build
           image: golang:1.23

@@ -8,6 +8,13 @@ set -euo pipefail
 
 BIN=${BIN:-./bin/whois2api}
 PORT=${PORT:-18080}
+
+# Fail with a useful message rather than a confusing health-check timeout.
+if [ ! -x "$BIN" ]; then
+  printf 'smoke: %s is not executable\n' "$BIN" >&2
+  printf 'smoke: build it first (make build) or set BIN=/path/to/whois2api\n' >&2
+  exit 1
+fi
 BASE="http://127.0.0.1:${PORT}"
 DATADIR=$(mktemp -d)
 TOKEN="smoke-token-$$"
