@@ -192,3 +192,46 @@ install" is "copy one file".
 - **No "availability score" heuristics.** A number between 0 and 1 would invite
   people to trust guesses. Three states plus an explicit confidence bucket is
   honest about what is known.
+
+## 8. Presentation is a renderer, not a second source of truth
+
+The UI is bilingual, and the way that was built matters more than the fact that
+it exists.
+
+**Codes, not prose.** Every caveat the engine can emit is a named constant in
+`internal/model` — `model.NoticeRateLimited`, `model.NoticeRegisteredWithoutDNS`,
+and so on — structurally `{code, text}`. The API sends both. Clients localise on
+`code`; `text` is the English fallback for codes they do not know. This is the
+same rule as the verdict itself: the machine-readable part is the contract, and
+the human part is a courtesy.
+
+The alternative is what most projects do, and it fails quietly:
+
+- Frontend does `msg.replace('rate-limited', '限流')`. Someone rewrites the
+  English sentence, the replacement stops matching, and Chinese users see
+  English. No test fails, because nothing is being tested.
+- Frontend greps prose to pick a severity class (`/not|expired|refus|rate/i`).
+  Works until a notice is reworded — or until the notice is in another language
+  and `refus` matches nothing.
+- Server returns translated strings chosen by an `Accept-Language` header. Now
+  the cache is keyed by content, the same registry answer is stored N times, and
+  a client that wanted a machine-readable reason gets a sentence.
+
+**Where the translation lives.** `web/i18n.js`, one block per language, flat
+`namespace.key` entries. It is a lookup table and nothing else — no plural
+rules, no interpolation engine beyond `{name}` substitution. The dictionary is
+small enough that a real i18n library would be more machinery than content.
+
+**What is not translated.** Registrar names, EPP status codes, public suffixes,
+raw WHOIS payloads. They are identifiers or verbatim registry output. Inventing
+a Chinese name for a registrar would be a worse answer than showing the one the
+registry published.
+
+**How it stays correct.** Three tests, each for a failure that actually
+happened during development:
+
+| Test | Failure it prevents |
+|---|---|
+| Every notice/error code translated | A new caveat ships in English inside a Chinese card |
+| English block contains no CJK | `Cached 63 秒 ago` shipped in the English UI |
+| `web/` matches embedded assets | Edit `web/app.js`, rebuild, wonder why nothing changed |

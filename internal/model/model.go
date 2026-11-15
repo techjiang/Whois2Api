@@ -45,6 +45,54 @@ const (
 	SourceCache Source = "cache"
 )
 
+// Notice is a machine-readable caveat attached to a result.
+//
+// Code is the contract: it never changes, and clients localise on it. Text is
+// the canonical English rendering, used when a client has no translation for
+// that code. Keeping both is what makes the UI translatable without asking it
+// to pattern-match English prose: prose changes, codes do not, and an unknown
+// code degrades to readable English instead of an empty line.
+type Notice struct {
+	Code string `json:"code"`
+	Text string `json:"text"`
+}
+
+// Notice codes. Adding one is a compatible change; renaming one is not.
+//
+// The codes deliberately carry no human wording: "rate_limited" survives a copy
+// edit, "Upstream registry rate-limited this query" does not.
+var (
+	NoticeRegistryWithheld = Notice{Code: "registry_withheld",
+		Text: "Registry withholds this record (usage restrictions) but confirms the name exists."}
+	NoticeRateLimited = Notice{Code: "rate_limited",
+		Text: "Upstream registry rate-limited this query; retry shortly."}
+	NoticeBlocked = Notice{Code: "blocked",
+		Text: "Upstream registry refused this query (access policy)."}
+	NoticeDNSResolvesButAvailable = Notice{Code: "dns_resolves_but_available",
+		Text: "The name resolves over DNS even though the registry reports it as available; usually wildcard DNS or a lagging registry."}
+	NoticeRegisteredWithoutDNS = Notice{Code: "registered_without_dns",
+		Text: "Registered but currently has no address records (parked or not yet configured)."}
+	NoticeUnknownButDNS = Notice{Code: "unknown_but_dns",
+		Text: "No definitive registry answer, but the name resolves over DNS, so it is almost certainly registered."}
+	NoticeSubdomainParentAvailable = Notice{Code: "subdomain_parent_available",
+		Text: "This is a subdomain; only its registrable domain can be registered."}
+	NoticeExpired = Notice{Code: "expired",
+		Text: "Registration has expired according to the registry."}
+	NoticeExpiresWithin7Days = Notice{Code: "expires_within_7_days",
+		Text: "Expires within 7 days; renewal is urgent."}
+	NoticeExpiresWithin30Days = Notice{Code: "expires_within_30_days",
+		Text: "Expires within 30 days."}
+
+	WarningStaleServed = Notice{Code: "stale_served",
+		Text: "Served from cache while a background refresh runs."}
+	WarningNoAnswerNoDNS = Notice{Code: "no_answer_no_dns",
+		Text: "No definitive registry answer and DNS has no records; availability is unconfirmed."}
+	WarningCachedWithoutRaw = Notice{Code: "cached_without_raw",
+		Text: "Cached answers carry no raw payload; add ?fresh=1 to query the registry again."}
+	WarningNoUpstreamPayload = Notice{Code: "no_upstream_payload",
+		Text: "This answer carried no upstream payload."}
+)
+
 // Status is an EPP/registry status entry with its canonical URL when known.
 type Status struct {
 	Code string `json:"code"`
@@ -104,8 +152,9 @@ type Domain struct {
 	// It is a corroborating signal only, never a verdict by itself.
 	DNSResolves *bool `json:"dns_resolves,omitempty"`
 
-	// Alerts are human-readable risk hints derived from the fields above.
-	Alerts []string `json:"alerts,omitempty"`
+	// Alerts are risk hints derived from the fields above. Each carries a
+	// stable code so a client can render it in its own language.
+	Alerts []Notice `json:"alerts,omitempty"`
 
 	// Raw is the unparsed upstream payload, included only when requested.
 	Raw string `json:"raw,omitempty"`
@@ -134,8 +183,8 @@ type Meta struct {
 	Channels []ChannelTiming `json:"channels,omitempty"`
 	// TableSource names the route table in use.
 	TableSource string `json:"table_source,omitempty"`
-	// Warnings are non-fatal caveats for the caller.
-	Warnings []string `json:"warnings,omitempty"`
+	// Warnings are non-fatal caveats for the caller, coded like Alerts.
+	Warnings []Notice `json:"warnings,omitempty"`
 }
 
 // Clone returns a deep copy so callers can safely adapt a shared or cached
@@ -178,7 +227,7 @@ func (d *Domain) Clone() *Domain {
 		copy(cp.Contacts, d.Contacts)
 	}
 	if d.Alerts != nil {
-		cp.Alerts = make([]string, len(d.Alerts))
+		cp.Alerts = make([]Notice, len(d.Alerts))
 		copy(cp.Alerts, d.Alerts)
 	}
 	return &cp

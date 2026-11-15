@@ -3,36 +3,37 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Whois2Api — domain lookup</title>
-<meta name="description" content="A fast, self-hosted WHOIS/RDAP lookup API with an honest three-state verdict.">
+<title data-i18n="title">Whois2Api — domain lookup</title>
+<meta name="description" data-i18n-content="description" content="A fast, self-hosted WHOIS/RDAP lookup API with an honest three-state verdict.">
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/app.css">
+<script src="/static/i18n.js"></script>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#main" data-i18n="skip">Skip to content</a>
 <header class="site">
   <div class="brand">
     <img src="/static/logo.svg" alt="" width="34" height="34">
     <span>Whois2Api</span>
   </div>
   <nav>
-    <a href="#docs">API</a>
-    <a href="/api/v1/status" target="_blank" rel="noopener">Status</a>
+    <a href="#docs" data-i18n="nav.api">API</a>
+    <a href="/api/v1/status" target="_blank" rel="noopener" data-i18n="nav.status">Status</a>
+    <button type="button" id="lang" class="lang" data-i18n="lang.other" aria-live="polite">中文</button>
   </nav>
 </header>
 
 <main id="main">
   <section class="hero">
-    <h1>Look up any domain, <em>honestly</em>.</h1>
+    <h1><span data-i18n="hero.a">Look up any domain, </span><em data-i18n="hero.em">honestly</em><span data-i18n="hero.b">.</span></h1>
     <p class="lede">
-      WHOIS and RDAP queried in parallel, cached on your own disk. When a registry
-      refuses to answer, this tells you <strong>unknown</strong> — never a confident guess.
+      <span data-i18n="lede.a">WHOIS and RDAP queried in parallel, cached on your own disk. When a registry refuses to answer, this tells you </span><strong data-i18n="lede.strong">unknown</strong><span data-i18n="lede.b"> — never a confident guess.</span>
     </p>
     <form id="lookup" autocomplete="off">
-      <label class="sr-only" for="domain">Domain name</label>
+      <label class="sr-only" for="domain" data-i18n="form.label">Domain name</label>
       <input id="domain" name="domain" type="text" placeholder="example.com"
              spellcheck="false" autocapitalize="none" autocomplete="off" required>
-      <button type="submit">Look up</button>
+      <button type="submit" data-i18n="form.submit">Look up</button>
     </form>
     <div class="examples" id="examples">
       <button type="button" data-d="google.com">google.com</button>
@@ -45,22 +46,20 @@
   <section id="output" aria-live="polite"></section>
 
   <section id="docs" class="docs">
-    <h2>Use it from the command line</h2>
+    <h2 data-i18n="docs.cli">Use it from the command line</h2>
     <pre><code>curl -s "<span class="host"></span>/api/v1/domain/example.com"</code></pre>
-    <h2>Batch lookups</h2>
+    <h2 data-i18n="docs.batch">Batch lookups</h2>
     <pre><code>curl -s -X POST "<span class="host"></span>/api/v1/batch" \
   -H 'Content-Type: application/json' \
   -d '{"domains":["example.com","example.org"]}'</code></pre>
-    <h2>What the three verdicts mean</h2>
+    <h2 data-i18n="docs.verdicts">What the three verdicts mean</h2>
     <dl class="verdicts">
-      <dt><span class="pill registered">registered</span></dt>
-      <dd>An authoritative registry returned a record for the name.</dd>
-      <dt><span class="pill available">available</span></dt>
-      <dd>A registry explicitly said the name does not exist. This is a positive
-          statement, not the absence of one.</dd>
-      <dt><span class="pill unknown">unknown</span></dt>
-      <dd>The registry was rate-limited, blocked us, timed out, or answered in a
-          dialect this build does not model. We do not guess.</dd>
+      <dt><span class="pill registered" data-i18n="verdict.registered">registered</span></dt>
+      <dd data-i18n="verdicts.registered">An authoritative registry returned a record for the name.</dd>
+      <dt><span class="pill available" data-i18n="verdict.available">available</span></dt>
+      <dd data-i18n="verdicts.available">A registry explicitly said the name does not exist. This is a positive statement, not the absence of one.</dd>
+      <dt><span class="pill unknown" data-i18n="verdict.unknown">unknown</span></dt>
+      <dd data-i18n="verdicts.unknown">The registry was rate-limited, blocked us, timed out, or answered in a dialect this build does not model. We do not guess.</dd>
     </dl>
   </section>
 </main>

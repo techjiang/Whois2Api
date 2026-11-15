@@ -125,6 +125,13 @@ with the 876 WHOIS hosts and 1203 RDAP endpoints verified against live servers.
   exactly one upstream query, so a busy install never gets itself throttled
 - Learned per-server query preferences (e.g. JPRS went from 3.4 s to 0.2 s)
 
+**Interface**
+- Bilingual UI (Chinese / English): switches in one click, remembers the
+  choice, and follows the browser's language on first visit
+- Notices and errors carry stable codes, so a client can render them in any
+  language instead of shipping English prose to its users
+- Light and dark themes, no CSS framework, no web fonts, no build step
+
 **Correctness**
 - IDN/Unicode input, punycode output, correct eTLD+1 via the Public Suffix List
 - Passes the official publicsuffix.org reference suite (98 cases)
@@ -184,6 +191,11 @@ curl -s "http://localhost:8080/api/v1/domain/example.com"
 
 `GET /api/v1/whois/{name}` is an alias that more people guess correctly.
 
+`alerts` (and `meta.warnings`) are objects, not strings: `{"code": "...",
+"text": "..."}`. `code` is stable and is what you translate or branch on;
+`text` is the English wording, used as a fallback. Full code list in
+[docs/CLIENT.md](docs/CLIENT.md#alerts-and-metawarnings).
+
 ### Batch
 
 ```bash
@@ -238,6 +250,20 @@ actionable `hint`:
 | 429 | `rate_limited` |
 | 500 | `internal_error` |
 | 504 | `upstream_unavailable` |
+
+Codes are stable and never renamed; a client may branch on them without
+parsing the English prose.
+
+## Language support
+
+The API speaks English (`text` / `message` / `hint` are English), and codes are
+the localisable part. The bundled UI ships Chinese and English; adding a third
+language is one block in `web/i18n.js`, and `go test ./internal/api` will list
+any code you forgot to translate.
+
+Notice codes live in `internal/model/model.go` as named constants
+(`model.NoticeRateLimited`, …) so a typo in a caveat is a compile error rather
+than a string that silently stops being translated.
 
 ## Configuration
 

@@ -261,11 +261,9 @@ func (s *Server) handleDomain(w http.ResponseWriter, r *http.Request) {
 				// empty field the caller would read as "the registry said
 				// nothing".
 				if result.Meta.Cached {
-					result.Meta.Warnings = append(result.Meta.Warnings,
-						"Cached answers carry no raw payload; add ?fresh=1 to query the registry again.")
+					result.Meta.Warnings = append(result.Meta.Warnings, model.WarningCachedWithoutRaw)
 				} else {
-					result.Meta.Warnings = append(result.Meta.Warnings,
-						"This answer carried no upstream payload.")
+					result.Meta.Warnings = append(result.Meta.Warnings, model.WarningNoUpstreamPayload)
 				}
 			}
 		} else {

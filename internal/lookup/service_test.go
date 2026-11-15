@@ -16,7 +16,7 @@ import (
 type fakeResolver struct {
 	mu    sync.Mutex
 	calls []string
-	reply func(name string) (*model.Domain, []model.ChannelTiming, []string)
+	reply func(name string) (*model.Domain, []model.ChannelTiming, []model.Notice)
 	delay time.Duration
 	count atomic.Int64
 }
@@ -40,7 +40,7 @@ func newTestService(t *testing.T, fake *fakeResolver, ttl, negTTL, stale time.Du
 	return svc
 }
 
-func (f *fakeResolver) lookup(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []string, error) {
+func (f *fakeResolver) lookup(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, t.Query)
 	f.mu.Unlock()
@@ -61,7 +61,7 @@ func (f *fakeResolver) lookup(ctx context.Context, t *Target) (*model.Domain, []
 }
 
 func TestLookupCachesResult(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		return &model.Domain{Verdict: model.VerdictRegistered, Source: model.SourceRDAP, Registrar: "R"}, nil, nil
 	}}
 	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
@@ -86,7 +86,7 @@ func TestLookupCachesResult(t *testing.T) {
 }
 
 func TestLookupSharesCacheAcrossSubdomains(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		return &model.Domain{Verdict: model.VerdictRegistered, Registrar: "R"}, nil, nil
 	}}
 	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
@@ -111,7 +111,7 @@ func TestLookupSharesCacheAcrossSubdomains(t *testing.T) {
 }
 
 func TestAvailableParentNeverMarksSubdomainAvailable(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		// The registrable domain is free...
 		return &model.Domain{Verdict: model.VerdictAvailable, Source: model.SourceRDAP}, nil, nil
 	}}
@@ -125,7 +125,7 @@ func TestAvailableParentNeverMarksSubdomainAvailable(t *testing.T) {
 	if res.Domain.Verdict == model.VerdictAvailable {
 		var flagged bool
 		for _, a := range res.Domain.Alerts {
-			if len(a) > 0 {
+			if a.Code != "" {
 				flagged = true
 			}
 		}
@@ -138,7 +138,7 @@ func TestAvailableParentNeverMarksSubdomainAvailable(t *testing.T) {
 func TestConcurrentLookupsCollapseToOneUpstreamCall(t *testing.T) {
 	fake := &fakeResolver{
 		delay: 150 * time.Millisecond,
-		reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+		reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 			return &model.Domain{Verdict: model.VerdictRegistered, Registrar: "R"}, nil, nil
 		},
 	}
@@ -169,7 +169,7 @@ func TestConcurrentLookupsCollapseToOneUpstreamCall(t *testing.T) {
 func TestStaleEntryServedWhileRefreshing(t *testing.T) {
 	var mode atomic.Value
 	mode.Store("first")
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		return &model.Domain{Verdict: model.VerdictRegistered, Registrar: mode.Load().(string)}, nil, nil
 	}}
 	// Positive TTL is tiny so the entry goes stale immediately.
@@ -212,7 +212,7 @@ func TestStaleEntryServedWhileRefreshing(t *testing.T) {
 }
 
 func TestUnknownVerdictIsNotCached(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		return &model.Domain{Verdict: model.VerdictUnknown}, nil, nil
 	}}
 	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
@@ -230,7 +230,7 @@ func TestUnknownVerdictIsNotCached(t *testing.T) {
 }
 
 func TestInvalidDomainRejectedBeforeAnyWork(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		t.Fatal("upstream must not be called for invalid input")
 		return nil, nil, nil
 	}}
@@ -247,7 +247,7 @@ func TestInvalidDomainRejectedBeforeAnyWork(t *testing.T) {
 // Get() used to have no hit/miss counters wired up, so /api/v1/status always
 // reported zero hits even on a fully warm cache.
 func TestCacheMetricsReflectHitsAndStaleServing(t *testing.T) {
-	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []string) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
 		return &model.Domain{Verdict: model.VerdictRegistered, Registrar: "R"}, nil, nil
 	}}
 	svc := newTestService(t, fake, 40*time.Millisecond, 40*time.Millisecond, time.Hour)

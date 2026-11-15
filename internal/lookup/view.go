@@ -1,7 +1,6 @@
 package lookup
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/asoe/whois2api/internal/model"
@@ -34,9 +33,7 @@ func present(d *model.Domain, t *Target) *model.Domain {
 	if out.Verdict == model.VerdictAvailable && t.SubdomainOf != "" {
 		out.Verdict = model.VerdictRegistered
 		out.Confidence = model.ConfidenceGood
-		out.Alerts = append(out.Alerts,
-			fmt.Sprintf("%s is a subdomain of %s; registries report only the registrable domain. The registrable name %s is available.",
-				t.ASCII, t.SubdomainOf, t.SubdomainOf))
+		out.Alerts = append(out.Alerts, model.NoticeSubdomainParentAvailable)
 	}
 
 	// Recompute time-relative fields at read time.
@@ -64,20 +61,20 @@ func storageView(d *model.Domain) *model.Domain {
 	return out
 }
 
-// mergeAlerts appends alerts without duplicating strings.
-func mergeAlerts(existing []string, extra []string) []string {
+// mergeAlerts appends alerts without duplicating codes.
+func mergeAlerts(existing []model.Notice, extra []model.Notice) []model.Notice {
 	if len(extra) == 0 {
 		return existing
 	}
 	seen := make(map[string]struct{}, len(existing))
 	for _, a := range existing {
-		seen[a] = struct{}{}
+		seen[a.Code] = struct{}{}
 	}
 	for _, a := range extra {
-		if _, ok := seen[a]; ok {
+		if _, ok := seen[a.Code]; ok {
 			continue
 		}
-		seen[a] = struct{}{}
+		seen[a.Code] = struct{}{}
 		existing = append(existing, a)
 	}
 	return existing

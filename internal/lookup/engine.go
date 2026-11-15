@@ -142,7 +142,7 @@ func (e *Engine) Route(t *Target) (tld.Route, error) {
 // Lookup performs the full resolution for a target and returns a populated
 // model.Domain plus channel timings. The returned error is only for failures
 // that prevent any answer (invalid input, unsupported TLD).
-func (e *Engine) Lookup(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []string, error) {
+func (e *Engine) Lookup(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
 	route, err := e.Route(t)
 	if err != nil {
 		return nil, nil, nil, err
@@ -162,7 +162,7 @@ func (e *Engine) Lookup(ctx context.Context, t *Target) (*model.Domain, []model.
 	}
 	domain.Unicode = displayName(t.Input, t.ASCII)
 
-	var warnings []string
+	var warnings []model.Notice
 	timings, primary := e.race(ctx, route, t.Query)
 
 	applyChannel(domain, primary)

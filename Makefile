@@ -49,8 +49,8 @@ assets: ## Re-encode the PNG logos from web/logo.svg
 	@command -v python3 >/dev/null || (echo "python3 required"; exit 1)
 	python3 -c "import cairosvg" 2>/dev/null || pip install --quiet cairosvg
 	python3 scripts/render_logos.py
-	cp web/index.html web/app.css web/app.js web/logo.svg web/logo-180.png \
-	   web/logo-512.png web/favicon-32.png internal/api/assets/
+	cp web/index.html web/app.css web/app.js web/i18n.js web/logo.svg \
+	   web/logo-180.png web/logo-512.png web/favicon-32.png internal/api/assets/
 
 .PHONY: clean
 clean: ## Remove build output

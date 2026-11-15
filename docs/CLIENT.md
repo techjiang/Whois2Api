@@ -129,15 +129,42 @@ curl -s "http://localhost:8080/api/v1/domain/example.com" | jq '.meta.channels'
 | 35 | No registry answer; DNS resolution suggests the name is taken |
 | 0 | Nothing usable; treat as unknown |
 
-### `alerts`
+### `alerts` and `meta.warnings`
 
-Human-readable strings explaining unusual findings. Surface them in a UI if you
-have one; they often explain a surprising verdict:
+Structured notices explaining unusual findings. Each one is `{code, text}`:
 
-- `Registered but currently has no address records (parked or not yet configured).`
-- `The name resolves over DNS even though the registry reports it as available; usually wildcard DNS or a lagging registry.`
-- `Registry withholds this record (usage restrictions) but confirms the name exists.`
-- `Upstream registry rate-limited this query; retry shortly.`
+```json
+"alerts": [
+  {"code": "registered_without_dns",
+   "text": "Registered but currently has no address records (parked or not yet configured)."}
+]
+```
+
+`code` is the contract — branch and localise on it. `text` is the canonical
+English wording, and the fallback when your client does not know the code. That
+split exists so a copy edit to the English sentence cannot silently leave your
+Chinese (or Japanese, or German) UI showing English.
+
+Codes currently emitted:
+
+| Code | Meaning |
+|---|---|
+| `registry_withheld` | The registry confirms the name exists but withholds the record |
+| `rate_limited` | The registry throttled this query; retry shortly |
+| `blocked` | The registry refused the query by access policy |
+| `dns_resolves_but_available` | Registry says free, DNS says it resolves (wildcard or lag) |
+| `registered_without_dns` | Registered but no address records right now |
+| `unknown_but_dns` | No registry answer, but the name resolves — almost certainly taken |
+| `subdomain_parent_available` | You asked about a subdomain; only the registrable parent is registrable |
+| `expired` | Registration has expired |
+| `expires_within_7_days` / `expires_within_30_days` | Renewal risk |
+| `stale_served` | Served from cache while a background refresh runs |
+| `no_answer_no_dns` | No registry answer and no DNS records; availability unconfirmed |
+| `cached_without_raw` | You asked for `?raw=1`, but cached entries carry no payload |
+| `no_upstream_payload` | The registry answered without a payload this build can show |
+
+New codes are additive; existing ones are never renamed. Treat an unknown code
+as `text` and carry on — that is what the bundled UI does.
 
 ### `meta.channels`
 

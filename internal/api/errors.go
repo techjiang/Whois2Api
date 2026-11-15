@@ -12,7 +12,6 @@ import (
 const (
 	CodeInvalidDomain       = "invalid_domain"
 	CodeUnsupportedTLD      = "unsupported_tld"
-	CodeNotFound            = "not_found"
 	CodeUnauthorized        = "unauthorized"
 	CodeRateLimited         = "rate_limited"
 	CodeBadRequest          = "bad_request"

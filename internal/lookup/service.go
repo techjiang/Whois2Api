@@ -23,11 +23,11 @@ type Service struct {
 	// refreshing tracks in-flight background refreshes by key.
 	refreshing sync.Map
 	// lookupHook overrides engine.Lookup in tests.
-	lookupHook func(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []string, error)
+	lookupHook func(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error)
 }
 
 // resolve runs the real engine unless a test hook is installed.
-func (s *Service) resolve(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []string, error) {
+func (s *Service) resolve(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
 	if s.lookupHook != nil {
 		return s.lookupHook(ctx, t)
 	}
@@ -101,7 +101,7 @@ func (s *Service) lookup(ctx context.Context, input string, bypassCache bool) (*
 					Stale:           true,
 					CacheAgeSeconds: ageSeconds(entry.StoredAt),
 					TableSource:     s.engine.table.Source(),
-					Warnings:        []string{"Served from cache while a background refresh runs."},
+					Warnings:        []model.Notice{model.WarningStaleServed},
 				},
 			}, nil
 		}
@@ -198,6 +198,6 @@ func (s *Service) Table() *tld.Table { return s.engine.table }
 
 // SetTestHook installs a deterministic resolver for tests. It is exported only
 // so the API tests can exercise the HTTP layer without touching the network.
-func SetTestHook(s *Service, hook func(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []string, error)) {
+func SetTestHook(s *Service, hook func(ctx context.Context, t *Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error)) {
 	s.lookupHook = hook
 }

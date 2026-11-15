@@ -62,7 +62,7 @@ func TestStorageViewDropsPerRequestFields(t *testing.T) {
 	target := &Target{Input: "example.com", ASCII: "example.com", Query: "example.com"}
 	d := present(availableDomain(), target)
 	d.DaysUntilExpiry = intPtr(3)
-	d.Alerts = []string{"a"}
+	d.Alerts = []model.Notice{{Code: "x", Text: "a"}}
 
 	stored := storageView(d)
 	if stored.Raw != "" {

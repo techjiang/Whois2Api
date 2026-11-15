@@ -99,6 +99,24 @@ curl -fsS -m 5 "$BASE/" | grep -q 'Whois2Api' || fail "index page"
 curl -fsS -m 5 "$BASE/static/logo.svg" | grep -q '<svg' || fail "logo asset"
 pass "UI and assets served"
 
+# The UI is bilingual and the dictionary is embedded, not fetched from a CDN.
+# A missing i18n.js means the page loads and stays English forever, which looks
+# like nothing is wrong.
+curl -fsS -m 5 "$BASE/static/i18n.js" | grep -q "notice.rate_limited" || fail "i18n dictionary missing notices"
+curl -fsS -m 5 "$BASE/" | grep -q '/static/i18n.js' || fail "index page does not load the dictionary"
+pass "bilingual UI assets are served"
+
+# Caveats must arrive as {code, text}; a bare string means the codes got lost
+# somewhere between the engine and the wire, and clients can no longer localise.
+alerts=$(curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/%E4%B8%AD%E5%9B%BD.cn")
+if printf '%s' "$alerts" | grep -q '"alerts":\['; then
+  printf '%s' "$alerts" | grep -q '"code":"' || fail "alerts are not coded objects"
+  printf '%s' "$alerts" | grep -q '"text":"' || fail "alerts carry no fallback text"
+  pass "alerts are coded objects"
+else
+  echo "  note no alerts on this answer; skipping the shape check"
+fi
+
 # Graceful shutdown: the process must exit 0 and leave a valid database.
 kill -TERM "$PID"
 for _ in $(seq 1 40); do

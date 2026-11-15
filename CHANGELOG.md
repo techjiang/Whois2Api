@@ -3,6 +3,70 @@
 All notable changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2025-11-15
+
+The UI is now bilingual (Chinese and English). Doing it the obvious way — running
+a find-and-replace over the English strings in the frontend — would have been
+the same class of mistake this project exists to avoid: a translation that
+silently drifts from its source. So the API changed first, and the UI became a
+renderer.
+
+### Changed
+
+- **`alerts` and `meta.warnings` are now `{code, text}` objects, not bare
+  strings.** `code` is a stable identifier (`rate_limited`,
+  `registered_without_dns`, …) and `text` is the canonical English wording.
+  Clients localise on the code and fall back to the text, so editing an English
+  sentence can no longer leave a Chinese reader with English in the middle of a
+  card. This is a breaking change to a field that used to be `[]string` — the
+  only one in this release, and the reason it is a minor bump rather than a
+  patch.
+- **Notice severity is derived from the code**, not from pattern-matching the
+  English prose (`/not|expired|refus|rate/i`), which would have broken the
+  moment the wording or the language changed.
+
+### Added
+
+- **Bilingual UI.** Chinese and English, switched with one button in the header,
+  persisted in `localStorage`, and defaulted from `navigator.languages` — so a
+  `zh-CN` browser opens in Chinese without anyone clicking anything.
+- **Switching language re-renders the card on screen**, not just the static
+  chrome. The last result and the last error are kept for exactly this reason;
+  otherwise a visitor who flips language mid-investigation gets a half-Chinese
+  page.
+- **Every notice and error code has a translation in every language**, enforced
+  by a test that reads the dictionary out of the embedded assets. An untranslated
+  code is a failure, not a stylistic nit.
+- **A test that fails when the English dictionary contains CJK text.** A
+  screenshot caught `Cached 63 秒 ago` in the English UI; this catches it in CI
+  instead of in a review.
+- **A test that fails when `web/` and `internal/api/assets/` disagree.** They are
+  duplicates by design (embedding needs the files under the package), and the
+  failure mode is silent: you edit `web/app.js`, rebuild, and nothing changes.
+
+### Fixed
+
+- **A cached answer for a subdomain was titled with the parent name.** The card
+  heading used `domain.name`, which for a cached entry is the registrable key,
+  so looking up `www.example.com` produced a card headed `example.com` — a name
+  nobody typed. The heading now shows the name as entered and keeps the ASCII
+  form as a secondary label for IDN input.
+- **A cache hit reported "Answered in 0 ms".** No registry round-trip happened,
+  so there was no duration to report; the timer looked broken. Cache hits now
+  report the entry's age (`缓存命中，2 分钟前写入` / `From cache (written 2 min
+  ago)`), and stale serves say which they are.
+- **The UI no longer makes a wasted `/api/v1/health` request** on every load. It
+  read nothing from it — the version comes from `/api/v1/status`.
+
+### Notes
+
+- The API is still English-first: `text` is English, `code` is the contract. If
+  you want a third language in the UI, add a block to `web/i18n.js`; the tests
+  will tell you which codes you missed.
+- Registry data (registrar names, EPP status codes, raw payloads) is never
+  translated. Inventing Chinese names for registrars would be worse than showing
+  the registry's own field.
+
 ## [1.1.0] — 2025-11-15
 
 Hardening pass over the v1.0.0 release. Everything here came from running the

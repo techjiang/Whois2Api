@@ -65,7 +65,7 @@ type fakeUpstream struct {
 	raw string
 }
 
-func (f *fakeUpstream) lookup(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []string, error) {
+func (f *fakeUpstream) lookup(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
 	f.calls++
 	if f.delay > 0 {
 		select {
@@ -331,7 +331,7 @@ func TestStaticPathTraversalBlocked(t *testing.T) {
 
 func TestPanicIsRecovered(t *testing.T) {
 	s, _ := newTestServer(t, config.Config{})
-	lookup.SetTestHook(s.service, func(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []string, error) {
+	lookup.SetTestHook(s.service, func(ctx context.Context, target *lookup.Target) (*model.Domain, []model.ChannelTiming, []model.Notice, error) {
 		panic("boom")
 	})
 	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", nil)
@@ -417,7 +417,7 @@ func TestRawPayloadOnCachedAnswerIsExplained(t *testing.T) {
 	}
 	var explained bool
 	for _, w := range out.Meta.Warnings {
-		if strings.Contains(w, "fresh=1") {
+		if w.Code == model.WarningCachedWithoutRaw.Code {
 			explained = true
 		}
 	}

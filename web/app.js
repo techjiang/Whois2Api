@@ -2,19 +2,37 @@
 (function () {
   'use strict';
 
+  var T = window.W2A;
   var form = document.getElementById('lookup');
   var input = document.getElementById('domain');
   var output = document.getElementById('output');
   var versionEl = document.getElementById('version');
+  var langBtn = document.getElementById('lang');
   var abort = null;
   // Last successful payload, so the "Copy JSON" and raw-payload actions do not
   // re-run the lookup.
   var lastResult = null;
+  // Last failure, kept so a language switch can re-render it in the new
+  // language instead of leaving a stale English sentence on screen.
+  var lastError = null;
   var lastName = '';
 
   // Fill in the host in the documentation examples.
   Array.prototype.forEach.call(document.querySelectorAll('.host'), function (el) {
     el.textContent = location.origin;
+  });
+
+  langBtn.addEventListener('click', function () {
+    T.setLang(T.other());
+    langBtn.textContent = T.t('lang.other');
+    langBtn.setAttribute('aria-label', T.t('lang.other'));
+  });
+
+  // Re-render whatever is on screen so switching language never leaves a
+  // half-translated card behind.
+  T.onChange(function () {
+    if (lastResult) render(lastResult);
+    else if (lastError) renderError(lastError.body, lastError.name);
   });
 
   document.getElementById('examples').addEventListener('click', function (ev) {
@@ -34,6 +52,7 @@
     if (abort) abort.abort();
     abort = new AbortController();
     lastResult = null;
+    lastError = null;
     lastName = name;
 
     output.innerHTML = '';
@@ -52,21 +71,24 @@
           lastResult = result.body;
           render(result.body);
         } else {
+          lastError = { body: result.body, name: name };
           renderError(result.body, name);
         }
       })
       .catch(function (err) {
         if (err.name === 'AbortError') return;
-        renderError({ error: { message: 'Could not reach the API.', hint: 'Check your connection and try again.' } }, name);
+        var body = { error: { message: T.t('error.network'), hint: T.t('error.networkHint') } };
+        lastError = { body: null, name: name, local: body };
+        renderError(body, name);
       });
   }
 
   function statusCard(name) {
     var card = el('section', 'card');
-    card.appendChild(el('h2', null, 'Looking up ' + name + '…'));
+    card.appendChild(el('h2', null, T.t('status.looking', { name: name })));
     var p = el('p', 'hint');
     p.appendChild(el('span', 'spinner'));
-    p.appendChild(document.createTextNode('querying RDAP and WHOIS in parallel'));
+    p.appendChild(document.createTextNode(T.t('status.progress')));
     card.appendChild(p);
     return card;
   }
@@ -74,10 +96,11 @@
   function renderError(body, name) {
     output.innerHTML = '';
     var card = el('section', 'card error-card');
-    card.appendChild(el('h2', null, 'Could not look up ' + name));
-    var msg = (body && body.error && body.error.message) || 'Unknown error.';
+    card.appendChild(el('h2', null, T.t('error.looking', { name: name })));
+    var msg = T.errorText(body, 'message') || T.t('error.unknown');
     card.appendChild(el('p', null, msg));
-    if (body && body.error && body.error.hint) card.appendChild(el('p', 'hint', body.error.hint));
+    var hint = T.errorText(body, 'hint');
+    if (hint && hint !== msg) card.appendChild(el('p', 'hint', hint));
     output.appendChild(card);
   }
 
@@ -88,37 +111,43 @@
 
     var card = el('section', 'card');
     var head = el('div', 'card-head');
-    head.appendChild(el('h2', null, d.name || ''));
-    if (d.unicode) head.appendChild(el('span', 'unicode', d.unicode));
+    // The heading is the name the caller asked for, not the record key. A
+    // cached answer for www.example.com is stored under example.com, so using
+    // d.name here would title the card with a name nobody typed.
+    var shown = d.unicode || d.input || d.name || '';
+    head.appendChild(el('h2', null, shown));
+    // For IDN input the ASCII form is worth showing: that is the name the
+    // registry actually answered about. For a subdomain the verdict line below
+    // already names the parent, so repeating it here would just be noise.
+    if (d.unicode && d.name) head.appendChild(el('span', 'unicode', d.name));
     head.appendChild(verdictPill(d.status));
     card.appendChild(head);
 
     if (d.subdomain_of) {
-      card.appendChild(el('p', 'verdict-line',
-        'Queried via its registrable domain ' + d.subdomain_of + ' — registries do not answer for subdomains.'));
+      card.appendChild(el('p', 'verdict-line', T.t('sentence.subdomain', { d: d.subdomain_of })));
     } else {
       card.appendChild(el('p', 'verdict-line', verdictSentence(d)));
     }
 
     var fields = [
-      ['Registrar', d.registrar],
-      ['Registrar IANA ID', d.registrar_id],
-      ['Registry domain ID', d.registry_id],
-      ['Created', fmtDate(d.created_at)],
-      ['Updated', fmtDate(d.updated_at)],
-      ['Expires', expiry(d.expires_at, d.days_until_expiry)],
-      ['DNSSEC', d.dnssec],
-      ['Public suffix', d.suffix],
-      ['DNS resolves', d.dns_resolves === undefined ? '' : (d.dns_resolves ? 'yes' : 'no')],
-      ['Source', d.source]
+      ['field.registrar', d.registrar],
+      ['field.registrar_id', d.registrar_id],
+      ['field.registry_id', d.registry_id],
+      ['field.created', fmtDate(d.created_at)],
+      ['field.updated', fmtDate(d.updated_at)],
+      ['field.expires', expiry(d.expires_at, d.days_until_expiry)],
+      ['field.dnssec', d.dnssec],
+      ['field.suffix', d.suffix],
+      ['field.dns', d.dns_resolves === undefined ? '' : (d.dns_resolves ? T.t('value.yes') : T.t('value.no'))],
+      ['field.source', d.source]
     ];
 
     var dl = el('dl', 'fields');
     fields.forEach(function (pair) {
       if (!pair[1]) return;
-      dl.appendChild(el('dt', null, pair[0]));
+      dl.appendChild(el('dt', null, T.t(pair[0])));
       var dd = el('dd');
-      if (pair[0] === 'Registrar' && d.registrar_url) {
+      if (pair[0] === 'field.registrar' && d.registrar_url) {
         var a = el('a', null, pair[1]);
         a.href = d.registrar_url;
         a.rel = 'noopener noreferrer nofollow';
@@ -131,19 +160,19 @@
     });
 
     if (d.name_servers && d.name_servers.length) {
-      dl.appendChild(el('dt', null, 'Name servers'));
+      dl.appendChild(el('dt', null, T.t('field.nameservers')));
       var nsDD = el('dd', 'tags');
       d.name_servers.slice(0, 8).forEach(function (ns) {
         nsDD.appendChild(el('span', 'pill neutral', ns));
       });
       if (d.name_servers.length > 8) {
-        nsDD.appendChild(el('span', 'pill neutral', '+' + (d.name_servers.length - 8) + ' more'));
+        nsDD.appendChild(el('span', 'pill neutral', T.t('more', { n: d.name_servers.length - 8 })));
       }
       dl.appendChild(nsDD);
     }
 
     if (d.statuses && d.statuses.length) {
-      dl.appendChild(el('dt', null, 'EPP status'));
+      dl.appendChild(el('dt', null, T.t('field.statuses')));
       var stDD = el('dd', 'tags');
       d.statuses.forEach(function (s) {
         if (s.url) {
@@ -164,16 +193,28 @@
     if (d.alerts && d.alerts.length) {
       var ul = el('ul', 'alerts');
       d.alerts.forEach(function (a) {
-        ul.appendChild(el('li', /not|expired|refus|rate/i.test(a) ? 'stop' : null, a));
+        // Severity comes from the code, not from grepping the English prose.
+        ul.appendChild(el('li', stopNotice(a.code) ? 'stop' : null, T.notice(a)));
       });
       card.appendChild(ul);
     }
 
     var metaLine = el('div', 'meta');
-    metaLine.appendChild(el('div', null, 'Answered in ' + (meta.total_ms || 0) + ' ms' +
-      (meta.cached ? (meta.stale ? ' (stale cache, refreshing)' : ' (cached)') : '')));
+    // A cache hit did not take 0 ms of registry time — it took none. Saying
+    // "0 ms" invites the reader to think the timer is broken, so report the
+    // cache age instead of a duration that was never measured.
+    var answered;
+    if (meta.cached) {
+      var age = duration(meta.cache_age_seconds);
+      answered = meta.stale
+        ? T.t('meta.stale', { age: age })
+        : T.t('meta.cached', { age: age });
+    } else {
+      answered = T.t('meta.answered', { ms: meta.total_ms || 0 });
+    }
+    metaLine.appendChild(el('div', null, answered));
     if (meta.channels && meta.channels.length) {
-      metaLine.appendChild(el('div', null, 'Channels: ' + meta.channels.map(function (c) {
+      metaLine.appendChild(el('div', null, T.t('meta.channels') + meta.channels.map(function (c) {
         return c.channel + ' ' + c.ms + 'ms' + (c.ok ? '' : ' ✕');
       }).join(' · ')));
     }
@@ -181,8 +222,8 @@
       // The "cached answers carry no raw payload" note is for API clients. The
       // raw button below already says the same thing, so repeating it as a
       // warning just adds noise to a perfectly fine answer.
-      if (w.indexOf('?fresh=1') !== -1) return;
-      metaLine.appendChild(el('div', null, w));
+      if (w.code === 'cached_without_raw') return;
+      metaLine.appendChild(el('div', null, T.notice(w)));
     });
     card.appendChild(metaLine);
     card.appendChild(actions(result));
@@ -190,12 +231,28 @@
     output.appendChild(card);
   }
 
+  // duration renders a coarse, human-scale age. Precision here would be false
+  // precision: nobody cares whether a cached answer is 43 or 44 seconds old.
+  function duration(seconds) {
+    var n = Math.max(0, Math.round(seconds || 0));
+    if (n < 90) return T.t('dur.seconds', { n: n });
+    if (n < 5400) return T.t('dur.minutes', { n: Math.round(n / 60) });
+    return T.t('dur.hours', { n: Math.round(n / 3600) });
+  }
+
+  // stopNotice marks caveats that mean "do not act on this answer".
+  function stopNotice(code) {
+    return ['rate_limited', 'blocked', 'expired',
+      'dns_resolves_but_available', 'no_answer_no_dns',
+      'cached_without_raw', 'no_upstream_payload'].indexOf(code) !== -1;
+  }
+
   // actions renders the per-result toolbar: copy the JSON, or expand the raw
   // upstream payload that produced the verdict.
   function actions(result) {
     var bar = el('div', 'actions');
 
-    var copy = el('button', 'ghost', 'Copy JSON');
+    var copy = el('button', 'ghost', T.t('action.copy'));
     copy.type = 'button';
     copy.addEventListener('click', function () {
       // Copy the answer without the raw dump: people pasting a verdict into a
@@ -204,8 +261,8 @@
       if (clone.domain) delete clone.domain.raw;
       var text = JSON.stringify(clone, null, 2);
       var ok = function () {
-        copy.textContent = 'Copied';
-        setTimeout(function () { copy.textContent = 'Copy JSON'; }, 1400);
+        copy.textContent = T.t('action.copied');
+        setTimeout(function () { copy.textContent = T.t('action.copy'); }, 1400);
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(ok, function () { fallbackCopy(text, ok); });
@@ -216,19 +273,17 @@
     bar.appendChild(copy);
 
     var raw = (result.domain && result.domain.raw) || '';
-    var rawBtn = el('button', 'ghost', raw ? 'Raw response' : 'Raw response (re-query)');
+    var rawBtn = el('button', 'ghost', raw ? T.t('action.raw') : T.t('action.rawRequery'));
     rawBtn.type = 'button';
-    if (!raw) {
-      rawBtn.title = 'Cached answers carry no upstream payload; this asks the registry again.';
-    }
+    if (!raw) rawBtn.title = T.t('action.rawTitle');
     rawBtn.addEventListener('click', function () {
       if (raw) {
         var open = toggleRaw(raw, (result.domain && result.domain.source) || 'upstream');
-        rawBtn.textContent = open ? 'Hide raw' : 'Raw response';
+        rawBtn.textContent = open ? T.t('action.hideRaw') : T.t('action.raw');
         return;
       }
       rawBtn.disabled = true;
-      rawBtn.textContent = 'Fetching…';
+      rawBtn.textContent = T.t('action.fetching');
       // fresh=1 forces a registry round-trip: a cached entry has no payload,
       // and silently returning an empty one would look like a silent registry.
       fetch('/api/v1/domain/' + encodeURIComponent(lastName) + '?raw=1&fresh=1')
@@ -236,17 +291,17 @@
         .then(function (body) {
           var payload = (body.domain && body.domain.raw) || '';
           if (!payload) {
-            rawBtn.textContent = 'Raw unavailable';
+            rawBtn.textContent = T.t('action.rawUnavailable');
             return;
           }
           raw = payload;
           toggleRaw(payload, (body.domain && body.domain.source) || 'upstream');
           rawBtn.disabled = false;
-          rawBtn.textContent = 'Hide raw';
+          rawBtn.textContent = T.t('action.hideRaw');
         })
         .catch(function () {
           rawBtn.disabled = false;
-          rawBtn.textContent = 'Raw response (re-query)';
+          rawBtn.textContent = T.t('action.rawRequery');
         });
     });
     bar.appendChild(rawBtn);
@@ -266,7 +321,7 @@
     }
     var details = el('details', 'raw');
     details.open = true;
-    details.appendChild(el('summary', null, 'Raw ' + source + ' response'));
+    details.appendChild(el('summary', null, T.t('raw.summary', { source: source })));
     var pre = el('pre');
     pre.textContent = raw;
     details.appendChild(pre);
@@ -287,22 +342,24 @@
   }
 
   function verdictPill(status) {
-    if (status === 'registered') return el('span', 'pill registered', 'registered');
-    if (status === 'available') return el('span', 'pill available', 'available');
-    return el('span', 'pill unknown', 'unknown');
+    if (status === 'registered') return el('span', 'pill registered', T.t('verdict.registered'));
+    if (status === 'available') return el('span', 'pill available', T.t('verdict.available'));
+    return el('span', 'pill unknown', T.t('verdict.unknown'));
   }
 
   function verdictSentence(d) {
-    var conf = typeof d.confidence === 'number' ? ' (confidence ' + d.confidence + '%)' : '';
-    if (d.status === 'registered') return 'An authoritative registry returned a record for this name' + conf + '.';
-    if (d.status === 'available') return 'The registry explicitly reported this name as not registered' + conf + '.';
-    return 'No registry gave a usable answer' + conf + '. This does not mean the name is free.';
+    var key = 'sentence.' + (d.status === 'registered' ? 'registered'
+      : d.status === 'available' ? 'available' : 'unknown');
+    var c = typeof d.confidence === 'number' ? d.confidence : 0;
+    return T.t(key, { c: c });
   }
 
   function expiry(iso, days) {
     if (!iso) return '';
     var text = fmtDate(iso);
-    if (typeof days === 'number') text += ' (' + (days >= 0 ? 'in ' + days + ' days' : Math.abs(days) + ' days ago') + ')';
+    if (typeof days === 'number') {
+      text += days >= 0 ? T.t('expiry.in', { n: days }) : T.t('expiry.ago', { n: Math.abs(days) });
+    }
     return text;
   }
 
@@ -331,8 +388,9 @@
   }
 
   // Show the deployed version in the footer.
-  fetch('/api/v1/health').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-  fetch('/api/v1/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (s) {
+  fetch('/api/v1/status').then(function (r) {
+    return r.ok ? r.json() : null;
+  }).then(function (s) {
     if (s && s.version) versionEl.textContent = 'v' + s.version;
   }).catch(function () {});
 })();

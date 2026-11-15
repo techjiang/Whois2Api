@@ -233,16 +233,16 @@ func applyChannel(d *model.Domain, r channelResult) {
 	case parse.OutcomeRestricted:
 		d.Verdict = model.VerdictRegistered
 		d.Confidence = model.ConfidenceGood
-		d.Alerts = append(d.Alerts, "Registry withholds this record (usage restrictions) but confirms the name exists.")
+		d.Alerts = append(d.Alerts, model.NoticeRegistryWithheld)
 	case parse.OutcomeNotFound:
 		d.Verdict = model.VerdictAvailable
 		d.Confidence = model.ConfidenceStrong
 	case parse.OutcomeRateLimited:
 		d.Verdict = model.VerdictUnknown
-		d.Alerts = append(d.Alerts, "Upstream registry rate-limited this query; retry shortly.")
+		d.Alerts = append(d.Alerts, model.NoticeRateLimited)
 	case parse.OutcomeBlocked:
 		d.Verdict = model.VerdictUnknown
-		d.Alerts = append(d.Alerts, "Upstream registry refused this query (access policy).")
+		d.Alerts = append(d.Alerts, model.NoticeBlocked)
 	default:
 		d.Verdict = model.VerdictUnknown
 	}
@@ -299,40 +299,39 @@ func applyChannel(d *model.Domain, r channelResult) {
 
 // reconcileDNS folds the DNS signal into the verdict without ever overriding a
 // definitive registry answer.
-func reconcileDNS(d *model.Domain, resolves bool, t *Target, warnings *[]string) *model.Domain {
+func reconcileDNS(d *model.Domain, resolves bool, t *Target, warnings *[]model.Notice) *model.Domain {
 	switch {
 	case d.Verdict == model.VerdictAvailable && resolves:
-		d.Alerts = append(d.Alerts,
-			"The name resolves over DNS even though the registry reports it as available; usually wildcard DNS or a lagging registry.")
+		d.Alerts = append(d.Alerts, model.NoticeDNSResolvesButAvailable)
 		if d.Confidence == model.ConfidenceStrong {
 			d.Confidence = model.ConfidenceGood
 		}
 	case d.Verdict == model.VerdictRegistered && !resolves && t.SubdomainOf == "":
-		d.Alerts = append(d.Alerts, "Registered but currently has no address records (parked or not yet configured).")
+		d.Alerts = append(d.Alerts, model.NoticeRegisteredWithoutDNS)
 	case d.Verdict == model.VerdictUnknown:
 		if resolves {
-			d.Alerts = append(d.Alerts, "No definitive registry answer, but the name resolves over DNS, so it is almost certainly registered.")
+			d.Alerts = append(d.Alerts, model.NoticeUnknownButDNS)
 			d.Confidence = model.ConfidenceWeak
 		} else if warnings != nil {
-			*warnings = append(*warnings, "No definitive registry answer and DNS has no records; availability is unconfirmed.")
+			*warnings = append(*warnings, model.WarningNoAnswerNoDNS)
 		}
 	}
 	return d
 }
 
 // expiryAlerts adds renewal-risk hints.
-func expiryAlerts(d *model.Domain) []string {
+func expiryAlerts(d *model.Domain) []model.Notice {
 	if d.ExpiresAt == nil || d.Verdict != model.VerdictRegistered {
 		return nil
 	}
 	days := int(time.Until(*d.ExpiresAt).Hours() / 24)
 	switch {
 	case days < 0:
-		return []string{"Registration has expired according to the registry."}
+		return []model.Notice{model.NoticeExpired}
 	case days <= 7:
-		return []string{"Expires within 7 days; renewal is urgent."}
+		return []model.Notice{model.NoticeExpiresWithin7Days}
 	case days <= 30:
-		return []string{"Expires within 30 days."}
+		return []model.Notice{model.NoticeExpiresWithin30Days}
 	}
 	return nil
 }

@@ -63,6 +63,13 @@ header.site, footer.site {
 nav { display: flex; gap: 1.25rem; }
 nav a { color: var(--muted); text-decoration: none; font-size: .94rem; }
 nav a:hover, nav a:focus-visible { color: var(--accent); }
+/* Language switch: a nav-level control, so it must not look like a form button. */
+nav button.lang {
+  padding: .15rem .55rem; font-size: .82rem; font-weight: 600;
+  color: var(--muted); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; line-height: 1.5;
+}
+nav button.lang:hover, nav button.lang:focus-visible { color: var(--accent); border-color: var(--accent); }
 main { max-width: 62rem; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2.5rem) 5rem; }
 .hero { padding: clamp(2rem, 7vw, 4.5rem) 0 2rem; }
 .hero h1 {
@@ -172,4 +179,14 @@ footer.site { color: var(--muted); font-size: .85rem; border-top: 1px solid var(
   dl.fields { grid-template-columns: 1fr; gap: .15rem 0; }
   dl.fields dt { margin-top: .5rem; }
   dl.verdicts { grid-template-columns: 1fr; }
+  /* The input's 18rem flex basis does not fit a phone, so the submit button
+     used to drop to its own line at its intrinsic width and sit there looking
+     like an afterthought. Stack them deliberately instead. */
+  form#lookup { flex-direction: column; align-items: stretch; }
+  /* In a column flex box the main axis is vertical, so the desktop
+     `flex: 1 1 18rem` basis becomes an 18rem-tall input. Reset it. */
+  input#domain { flex: 0 0 auto; }
+  form#lookup button { width: 100%; }
+  .hero { padding-top: 1.75rem; }
+  nav { gap: .9rem; }
 }
