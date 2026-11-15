@@ -299,24 +299,43 @@ func applyChannel(d *model.Domain, r channelResult) {
 
 // reconcileDNS folds the DNS signal into the verdict without ever overriding a
 // definitive registry answer.
-func reconcileDNS(d *model.Domain, resolves bool, t *Target, warnings *[]model.Notice) *model.Domain {
+func reconcileDNS(d *model.Domain, resolves bool, warnings *[]model.Notice) *model.Domain {
+	alerts, confidence := dnsSignals(d, resolves, warnings)
+	d.Alerts = append(d.Alerts, alerts...)
+	if confidence != nil {
+		d.Confidence = *confidence
+	}
+	return d
+}
+
+// dnsSignals turns the DNS probe into caveats, plus a reduced confidence when
+// the probe argues against the registry's answer.
+//
+// The probe always measures the registrable domain, which is what the cache
+// entry describes. A subdomain's own A records would say nothing about whether
+// the registrable domain is registered, so there is deliberately no
+// subdomain special case here any more: the caller's name never enters this
+// decision.
+func dnsSignals(d *model.Domain, resolves bool, warnings *[]model.Notice) ([]model.Notice, *model.Confidence) {
+	weakened := model.ConfidenceGood
 	switch {
 	case d.Verdict == model.VerdictAvailable && resolves:
-		d.Alerts = append(d.Alerts, model.NoticeDNSResolvesButAvailable)
 		if d.Confidence == model.ConfidenceStrong {
-			d.Confidence = model.ConfidenceGood
+			return []model.Notice{model.NoticeDNSResolvesButAvailable}, &weakened
 		}
-	case d.Verdict == model.VerdictRegistered && !resolves && t.SubdomainOf == "":
-		d.Alerts = append(d.Alerts, model.NoticeRegisteredWithoutDNS)
+		return []model.Notice{model.NoticeDNSResolvesButAvailable}, nil
+	case d.Verdict == model.VerdictRegistered && !resolves:
+		return []model.Notice{model.NoticeRegisteredWithoutDNS}, nil
 	case d.Verdict == model.VerdictUnknown:
 		if resolves {
-			d.Alerts = append(d.Alerts, model.NoticeUnknownButDNS)
-			d.Confidence = model.ConfidenceWeak
-		} else if warnings != nil {
+			weak := model.ConfidenceWeak
+			return []model.Notice{model.NoticeUnknownButDNS}, &weak
+		}
+		if warnings != nil {
 			*warnings = append(*warnings, model.WarningNoAnswerNoDNS)
 		}
 	}
-	return d
+	return nil, nil
 }
 
 // expiryAlerts adds renewal-risk hints.

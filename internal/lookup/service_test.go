@@ -2,6 +2,7 @@ package lookup
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -272,5 +273,113 @@ func TestCacheMetricsReflectHitsAndStaleServing(t *testing.T) {
 	}
 	if _, metrics := svc.Stats(); metrics.StaleHits < 1 {
 		t.Fatalf("stale_hits = %d, want >= 1", metrics.StaleHits)
+	}
+}
+
+// Asking for ?fresh=1 means "do not use the cache". Reading an entry only to
+// discard it still counted as a hit, so the status endpoint reported hits for
+// answers that were by definition not served from cache — a number an operator
+// would read as "the cache is doing its job".
+func TestBypassingTheCacheDoesNotCountAsAHit(t *testing.T) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
+		return &model.Domain{Verdict: model.VerdictRegistered, Registrar: "R"}, nil, nil
+	}}
+	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
+
+	if _, err := svc.Lookup(context.Background(), "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	_, before := svc.Stats()
+	for i := 0; i < 3; i++ {
+		if _, err := svc.LookupFresh(context.Background(), "example.com"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, after := svc.Stats()
+	if after.Hits != before.Hits {
+		t.Fatalf("hits went %d -> %d after three cache-bypassing lookups", before.Hits, after.Hits)
+	}
+	if after.Writes <= before.Writes {
+		t.Fatalf("bypassing lookups should still refresh the entry (writes %d -> %d)", before.Writes, after.Writes)
+	}
+}
+
+// Same question, same answer, whether or not the entry is warm. The cache is an
+// implementation detail; it must not be observable in the response body.
+func TestColdAndWarmAnswersAgree(t *testing.T) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
+		live := true
+		return &model.Domain{
+			Verdict: model.VerdictRegistered, Confidence: model.ConfidenceStrong,
+			Source: model.SourceRDAP, Registrar: "R", DNSResolves: &live,
+		}, nil, nil
+	}}
+	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
+
+	cold, err := svc.Lookup(context.Background(), "www.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	warm, err := svc.Lookup(context.Background(), "www.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !warm.Meta.Cached {
+		t.Fatal("second lookup should be a cache hit")
+	}
+	if cold.Domain.Name != warm.Domain.Name || cold.Domain.Verdict != warm.Domain.Verdict {
+		t.Fatalf("name/verdict changed with cache state: cold %q/%q vs warm %q/%q",
+			cold.Domain.Name, cold.Domain.Verdict, warm.Domain.Name, warm.Domain.Verdict)
+	}
+	if codesOf(cold.Domain.Alerts) != codesOf(warm.Domain.Alerts) {
+		t.Fatalf("alerts changed with cache state: cold %s vs warm %s",
+			codesOf(cold.Domain.Alerts), codesOf(warm.Domain.Alerts))
+	}
+	if cold.Domain.Confidence != warm.Domain.Confidence {
+		t.Fatalf("confidence changed with cache state: %d vs %d", cold.Domain.Confidence, warm.Domain.Confidence)
+	}
+}
+
+func codesOf(alerts []model.Notice) string {
+	out := make([]string, 0, len(alerts))
+	for _, a := range alerts {
+		out = append(out, a.Code)
+	}
+	return strings.Join(out, ",")
+}
+
+// Whichever name fills the cache entry, every later caller must see its own.
+// This is the cross-name version of the test above: a subdomain warms the
+// entry, then the parent asks, and the parent must not be told it is the
+// subdomain.
+func TestParentLookupAfterSubdomainDoesNotInheritItsName(t *testing.T) {
+	fake := &fakeResolver{reply: func(string) (*model.Domain, []model.ChannelTiming, []model.Notice) {
+		return &model.Domain{Verdict: model.VerdictRegistered, Confidence: model.ConfidenceStrong, Source: model.SourceRDAP}, nil, nil
+	}}
+	svc := newTestService(t, fake, time.Minute, time.Minute, time.Hour)
+
+	sub, err := svc.Lookup(context.Background(), "deep.sub.example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sub.Domain.Name != "deep.sub.example.org" || sub.Domain.SubdomainOf != "example.org" {
+		t.Fatalf("subdomain view = name %q, subdomain_of %q", sub.Domain.Name, sub.Domain.SubdomainOf)
+	}
+
+	parent, err := svc.Lookup(context.Background(), "example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !parent.Meta.Cached {
+		t.Fatal("the parent should reuse the entry the subdomain filled")
+	}
+	if parent.Domain.Name != "example.org" {
+		t.Fatalf("parent view name = %q, want example.org", parent.Domain.Name)
+	}
+	if parent.Domain.SubdomainOf != "" {
+		t.Fatalf("parent view inherited subdomain_of = %q", parent.Domain.SubdomainOf)
+	}
+	if got := fake.count.Load(); got != 1 {
+		t.Fatalf("upstream called %d times, want 1", got)
 	}
 }

@@ -76,6 +76,21 @@ hits=$(curl -s -m 5 "${auth[@]}" "$BASE/api/v1/status" | grep -o '"hits":[0-9]*'
 [ "${hits:-0}" -ge 1 ] || fail "cache hits did not increase after a repeated lookup (got ${hits:-0})"
 pass "cache counters are live"
 
+# Same question, same answer. A warm entry stores the registrable domain's
+# record, so it must still echo the caller's own name: query a subdomain once
+# and the parent used to come back labelled with the subdomain nobody typed.
+curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/www.example.com" >/dev/null
+warm=$(curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/example.com")
+printf '%s' "$warm" | grep -q '"name":"example.com"' || fail "warm answer is not named after the caller: $warm"
+printf '%s' "$warm" | grep -q '"subdomain_of"' && fail "warm parent answer inherited a subdomain relationship"
+pass "warm answers echo the caller's name"
+
+# Batch items carry no raw payload: there is no per-item flag to ask for it.
+batch=$(curl -s -m 20 "${auth[@]}" -X POST -H 'Content-Type: application/json' \
+  -d '{"domains":["example.com","example.org"]}' "$BASE/api/v1/batch")
+printf '%s' "$batch" | grep -q '"raw"' && fail "batch shipped an upstream payload nobody asked for"
+pass "batch carries no raw payload"
+
 code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${auth[@]}" "$BASE/api/v1/domain/not%20a%20domain")
 [ "$code" = "400" ] || fail "invalid domain returned $code, want 400"
 pass "invalid input rejected"

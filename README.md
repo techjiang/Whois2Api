@@ -191,6 +191,11 @@ curl -s "http://localhost:8080/api/v1/domain/example.com"
 
 `GET /api/v1/whois/{name}` is an alias that more people guess correctly.
 
+The same answer comes back whether the entry was warm or cold — name, verdict,
+confidence and caveats. A cached record stores what the registry said; the DNS
+probe, the expiry countdown and the subdomain relationship are re-derived per
+request, so caching cannot change the answer you get.
+
 `alerts` (and `meta.warnings`) are objects, not strings: `{"code": "...",
 "text": "..."}`. `code` is stable and is what you translate or branch on;
 `text` is the English wording, used as a fallback. Full code list in
@@ -208,6 +213,11 @@ Batch cap defaults to 20 (`W2A_MAX_BATCH`). Per-item errors do not fail the
 request, results come back in the order you sent them, and items are resolved
 concurrently (8 at a time) — a batch of 20 uncached domains costs roughly one
 registry round-trip, not twenty.
+
+Batch items never carry the raw upstream payload: there is no per-item flag to
+ask for it, so sending it would be a surprise, and five cold items would add
+about 11 KB of registry text to the response. Use the single-domain endpoint
+with `?raw=1` when you need to read the registry's own words.
 
 ### Seeing the raw registry answer
 

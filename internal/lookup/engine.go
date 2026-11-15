@@ -176,9 +176,14 @@ func (e *Engine) Lookup(ctx context.Context, t *Target) (*model.Domain, []model.
 	// flags the (rare) case where DNS says a name exists but the registry
 	// said it was free.
 	if e.opts.ResolveDNS {
-		if resolves, dnsErr := e.dnsResolves(ctx, t.ASCII); dnsErr == nil {
+		// Probe the registrable domain, not the caller's exact name. The probe
+		// is stored with the cache entry, and the entry belongs to t.Query: a
+		// subdomain's A records say nothing about whether the registrable
+		// domain is registered, and probing them meant one query for a dead
+		// subdomain could cache "no DNS" for a perfectly live parent.
+		if resolves, dnsErr := e.dnsResolves(ctx, t.Query); dnsErr == nil {
 			domain.DNSResolves = &resolves
-			domain = reconcileDNS(domain, resolves, t, &warnings)
+			domain = reconcileDNS(domain, resolves, &warnings)
 		}
 	}
 

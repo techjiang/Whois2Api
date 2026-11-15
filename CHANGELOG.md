@@ -3,6 +3,51 @@
 All notable changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] — 2025-11-15
+
+Same domain, same answer. This release fixes the cases where the response
+depended on state the caller cannot see — whether the entry was warm, and who
+happened to fill it first.
+
+Every fix below was found by running the binary and comparing two responses to
+the same question, not by reading the code.
+
+### Fixed
+
+- **A warm answer dropped caveats a cold one reported.** `registered_without_dns`
+  (and `dns_resolves_but_available`, `expires_within_30_days`, …) were computed
+  once at lookup time and then stripped by `storageView` along with everything
+  else per-request. Ask about a dead-but-registered name twice and the second
+  answer quietly omitted the warning. Alerts are now split into two kinds:
+  registry facts, which are cached, and per-request observations (DNS probe,
+  expiry countdown, subdomain rewrite), which are re-derived on every read.
+- **A subdomain query renamed its parent.** The cache entry stores the name of
+  whichever query filled it; `present()` copied that name into the response. One
+  lookup of `deep.sub.example.org` and every later answer about `example.org`
+  came back titled `deep.sub.example.org` — a name the caller never typed, for a
+  record that is about the parent.
+- **A dead subdomain could cache "no DNS" for a live parent.** The DNS probe
+  measured the caller's exact name but the result was stored in an entry keyed
+  by the registrable domain, so `no-such-sub.example.org` stored
+  `dns_resolves: false` for `example.org`. The probe now measures the
+  registrable domain, which is what the entry describes.
+- **`/api/v1/batch` shipped upstream payloads nobody asked for.** The raw WHOIS
+  text / RDAP JSON is opt-in via `?raw=1` on the single-domain endpoint, but a
+  batch has no such flag — and still returned the payload. A cold five-domain
+  batch answered with ~11 KB of registry text; the same five names warm answered
+  with 1.8 KB. Batch responses now carry no payload.
+- **`?fresh=1` counted as a cache hit.** The bypass read the entry (incrementing
+  `hits`) and then ignored it, so `/api/v1/status` reported hits for answers that
+  were by definition not served from cache. Three forced refreshes showed three
+  hits.
+
+### Added
+
+- Tests for the invariants these bugs violated: cold and warm answers to the
+  same question are identical; a parent lookup after a subdomain lookup does not
+  inherit the subdomain's name; only registry facts are cached; a batch never
+  ships a payload; a bypass is not a hit.
+
 ## [1.2.0] — 2025-11-15
 
 The UI is now bilingual (Chinese and English). Doing it the obvious way — running

@@ -155,6 +155,22 @@ before the write. Getting this backwards is subtle and expensive — when the
 `registered` into the entry shared with a genuinely available parent, so the
 next lookup of the parent reported a for-sale domain as taken.
 
+The rule extends to alerts, which is where it is easiest to get wrong twice.
+Notices divide into two kinds:
+
+- **registry facts** (`rate_limited`, `registry_withheld`, `blocked`) — part of
+  the answer, cached.
+- **request observations** (`registered_without_dns`, `dns_resolves_but_available`,
+  `expires_within_30_days`, `subdomain_parent_available`) — measurements and
+  countdowns that belong to one request, re-derived on every read.
+
+Caching the second kind made a warm answer quietly drop a caveat a cold one
+reported: same domain, same record, different warnings. Re-deriving them has the
+mirror-image failure, so the measurement itself must be stable across callers:
+the DNS probe therefore targets the registrable domain, because that is what the
+entry describes. Probing the caller's name stored "a dead subdomain has no
+address records" under the parent's key.
+
 **Cache counters are wired at the store, not the caller.** `Get` counts a hit
 or a miss; the singleflight re-check uses `Peek` so de-duplication does not
 double the miss count. Stale serves are counted separately. A status endpoint

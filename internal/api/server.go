@@ -351,6 +351,14 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				item.Error = friendlyError(err)
 			} else {
+				// A batch has nowhere to ask for the payload and no per-item
+				// flag to opt in: strip it. Left in, a five-domain cold batch
+				// shipped ~11 KB of registry text nobody requested, while the
+				// single-domain endpoint correctly sent none. Same answer,
+				// different size, depending on which endpoint you called.
+				if res.Domain != nil {
+					res.Domain.Raw = ""
+				}
 				item.Domain = res.Domain
 				item.Meta = res.Meta
 			}

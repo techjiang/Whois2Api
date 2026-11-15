@@ -148,8 +148,12 @@ type Domain struct {
 	// SubdomainOf is set when the input was deeper than the registrable domain.
 	SubdomainOf string `json:"subdomain_of,omitempty"`
 
-	// DNSResolves reports whether the name had address records at lookup time.
-	// It is a corroborating signal only, never a verdict by itself.
+	// DNSResolves reports whether the registrable domain had address records at
+	// lookup time. It is a corroborating signal only, never a verdict by
+	// itself, and it is a point-in-time measurement rather than registry data.
+	// The probe targets the registrable domain because that is what the cache
+	// entry describes: probing the caller's subdomain instead made the same
+	// entry mean different things depending on who filled it.
 	DNSResolves *bool `json:"dns_resolves,omitempty"`
 
 	// Alerts are risk hints derived from the fields above. Each carries a

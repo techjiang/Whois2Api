@@ -16,6 +16,13 @@
   // language instead of leaving a stale English sentence on screen.
   var lastError = null;
   var lastName = '';
+  // Raw payload and whether it is expanded. Kept outside the DOM because a
+  // language switch rebuilds the card: without this, the payload survives but
+  // the panel does not, and the button offers to fetch it again from a
+  // registry we already asked.
+  var lastRaw = '';
+  var lastRawSource = '';
+  var rawVisible = false;
 
   // Fill in the host in the documentation examples.
   Array.prototype.forEach.call(document.querySelectorAll('.host'), function (el) {
@@ -54,6 +61,9 @@
     lastResult = null;
     lastError = null;
     lastName = name;
+    lastRaw = '';
+    lastRawSource = '';
+    rawVisible = false;
 
     output.innerHTML = '';
     output.appendChild(statusCard(name));
@@ -229,6 +239,11 @@
     card.appendChild(actions(result));
 
     output.appendChild(card);
+
+    // Re-open the payload panel after a re-render (language switch) so the
+    // reader does not lose what they were looking at. This has to run after the
+    // card is in the document: showRaw finds its host through #output.
+    if (lastRaw) showRaw(lastRaw, lastRawSource);
   }
 
   // duration renders a coarse, human-scale age. Precision here would be false
@@ -272,14 +287,23 @@
     });
     bar.appendChild(copy);
 
-    var raw = (result.domain && result.domain.raw) || '';
+    // The payload may have arrived with this answer, or from an earlier
+    // re-query for the same name. Both count as "already have it": fetching a
+    // second time would look like the first fetch had failed.
+    if (!lastRaw && result.domain && result.domain.raw) {
+      lastRaw = result.domain.raw;
+      lastRawSource = result.domain.source || 'upstream';
+    }
+    var raw = lastRaw;
     var rawBtn = el('button', 'ghost', raw ? T.t('action.raw') : T.t('action.rawRequery'));
     rawBtn.type = 'button';
     if (!raw) rawBtn.title = T.t('action.rawTitle');
+    if (raw && rawVisible) rawBtn.textContent = T.t('action.hideRaw');
     rawBtn.addEventListener('click', function () {
-      if (raw) {
-        var open = toggleRaw(raw, (result.domain && result.domain.source) || 'upstream');
-        rawBtn.textContent = open ? T.t('action.hideRaw') : T.t('action.raw');
+      if (lastRaw) {
+        rawVisible = !rawVisible;
+        showRaw(lastRaw, lastRawSource);
+        rawBtn.textContent = rawVisible ? T.t('action.hideRaw') : T.t('action.raw');
         return;
       }
       rawBtn.disabled = true;
@@ -294,8 +318,10 @@
             rawBtn.textContent = T.t('action.rawUnavailable');
             return;
           }
-          raw = payload;
-          toggleRaw(payload, (body.domain && body.domain.source) || 'upstream');
+          lastRaw = payload;
+          lastRawSource = (body.domain && body.domain.source) || 'upstream';
+          rawVisible = true;
+          showRaw(lastRaw, lastRawSource);
           rawBtn.disabled = false;
           rawBtn.textContent = T.t('action.hideRaw');
         })
@@ -309,24 +335,27 @@
     return bar;
   }
 
-  // toggleRaw shows the payload in place, under the card it belongs to.
-  // It returns the resulting open state.
-  function toggleRaw(raw, source) {
+  // showRaw renders the payload under the card it belongs to and returns the
+  // panel. It is idempotent: the card is rebuilt on every re-render, so this is
+  // also how the panel comes back after a language switch.
+  function showRaw(raw, source) {
     var card = output.querySelector('.card');
-    if (!card) return false;
-    var existing = card.querySelector('details.raw');
-    if (existing) {
-      existing.open = !existing.open;
-      return existing.open;
+    if (!card) return null;
+    var details = card.querySelector('details.raw');
+    if (!details) {
+      details = el('details', 'raw');
+      details.appendChild(el('summary', null, T.t('raw.summary', { source: source })));
+      var pre = el('pre');
+      pre.textContent = raw;
+      details.appendChild(pre);
+      // The summary belongs to <details>, so the browser toggles it for us.
+      // Track that here, or the next re-render silently re-opens a panel the
+      // reader had just closed.
+      details.addEventListener('toggle', function () { rawVisible = details.open; });
+      card.appendChild(details);
     }
-    var details = el('details', 'raw');
-    details.open = true;
-    details.appendChild(el('summary', null, T.t('raw.summary', { source: source })));
-    var pre = el('pre');
-    pre.textContent = raw;
-    details.appendChild(pre);
-    card.appendChild(details);
-    return true;
+    details.open = rawVisible;
+    return details;
   }
 
   function fallbackCopy(text, done) {

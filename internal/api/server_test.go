@@ -452,3 +452,33 @@ func TestRawPayloadReturnedWhenAsked(t *testing.T) {
 		t.Fatalf("raw = %q, want the upstream payload", out.Domain.Raw)
 	}
 }
+
+// A batch has no per-item way to opt into the raw payload, so it must not ship
+// one. It used to: a cold five-domain batch answered with roughly 11 KB of
+// registry text that nobody asked for, while the single-domain endpoint
+// correctly sent none. Same answer, wildly different size.
+func TestBatchNeverShipsRawPayload(t *testing.T) {
+	s, fake := newTestServer(t, config.Config{MaxBatch: 4})
+	fake.raw = strings.Repeat("Domain Name: example.com\n", 100)
+
+	rec := doRequest(t, s, http.MethodPost, "/api/v1/batch",
+		`{"domains":["one.com","two.com"]}`,
+		map[string]string{"Content-Type": "application/json"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "raw") {
+		t.Fatalf("batch response carries a raw payload: %s", rec.Body.String())
+	}
+	var out struct {
+		Results []model.BatchItem `json:"results"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	for _, item := range out.Results {
+		if item.Domain != nil && item.Domain.Raw != "" {
+			t.Fatalf("%s carried %d bytes of raw payload", item.Query, len(item.Domain.Raw))
+		}
+	}
+}

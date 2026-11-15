@@ -80,30 +80,36 @@ func (s *Service) lookup(ctx context.Context, input string, bypassCache bool) (*
 
 	// A bypassing caller still joins an in-flight group below, so "refresh"
 	// cannot turn into a stampede on a shared key.
-	if entry, ok := s.cachedEntry(key); ok && !bypassCache {
-		if entry.Fresh(now) {
-			return &ServiceResult{
-				Domain: present(entry.Domain, target),
-				Meta: model.Meta{
-					Cached:          true,
-					CacheAgeSeconds: ageSeconds(entry.StoredAt),
-					TableSource:     s.engine.table.Source(),
-				},
-			}, nil
-		}
-		if s.withinStale(entry, now) {
-			s.cache.CountStale()
-			s.triggerRefresh(key, target)
-			return &ServiceResult{
-				Domain: present(entry.Domain, target),
-				Meta: model.Meta{
-					Cached:          true,
-					Stale:           true,
-					CacheAgeSeconds: ageSeconds(entry.StoredAt),
-					TableSource:     s.engine.table.Source(),
-					Warnings:        []model.Notice{model.WarningStaleServed},
-				},
-			}, nil
+	//
+	// A bypass reads no cache entry at all. Reading one just to discard it
+	// would still count as a hit, and /api/v1/status would report hits for
+	// answers that were deliberately not served from cache.
+	if !bypassCache {
+		if entry, ok := s.cachedEntry(key); ok {
+			if entry.Fresh(now) {
+				return &ServiceResult{
+					Domain: present(entry.Domain, target),
+					Meta: model.Meta{
+						Cached:          true,
+						CacheAgeSeconds: ageSeconds(entry.StoredAt),
+						TableSource:     s.engine.table.Source(),
+					},
+				}, nil
+			}
+			if s.withinStale(entry, now) {
+				s.cache.CountStale()
+				s.triggerRefresh(key, target)
+				return &ServiceResult{
+					Domain: present(entry.Domain, target),
+					Meta: model.Meta{
+						Cached:          true,
+						Stale:           true,
+						CacheAgeSeconds: ageSeconds(entry.StoredAt),
+						TableSource:     s.engine.table.Source(),
+						Warnings:        []model.Notice{model.WarningStaleServed},
+					},
+				}, nil
+			}
 		}
 	}
 
@@ -131,7 +137,7 @@ func (s *Service) lookup(ctx context.Context, input string, bypassCache bool) (*
 		// Only cache real answers. Caching "unknown" would pin a transient
 		// upstream failure for the whole TTL.
 		if domain.Verdict != model.VerdictUnknown {
-			_ = s.cache.Put(key, storageView(domain), domain.Source)
+			_ = s.cache.Put(key, storageView(domain, target), domain.Source)
 		}
 		return &cache.Envelope{Domain: domain, Meta: meta}, nil
 	})
@@ -180,7 +186,7 @@ func (s *Service) triggerRefresh(key string, target *Target) {
 		if err != nil || domain.Verdict == model.VerdictUnknown {
 			return
 		}
-		_ = s.cache.Put(key, storageView(domain), domain.Source)
+		_ = s.cache.Put(key, storageView(domain, target), domain.Source)
 	}()
 }
 
