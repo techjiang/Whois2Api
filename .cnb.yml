@@ -1,35 +1,58 @@
-# CNB pipeline: test on every push, build and publish on tags.
+# CNB pipeline.
+#
+# Shape follows the official grammar: branch events live under the branch name,
+# repository-level events (tag_push) live under the "$" fallback branch. Each
+# stage's work is expressed as jobs; a single job may omit the stage "name".
+#
+# golang:1.23 (Debian) rather than the alpine tag, because the race detector
+# needs a C toolchain.
+
 main:
   push:
     - stages:
-        - name: lint and vet
+        - name: lint
           image: golang:1.23
-          commands:
-            - gofmt -l . | tee /tmp/unformatted
-            - test ! -s /tmp/unformatted
+          script:
+            - test -z "$(gofmt -l .)" || { echo "unformatted files:"; gofmt -l .; exit 1; }
             - go vet ./...
+
         - name: test
           image: golang:1.23
-          commands:
-            - go test -race -coverprofile=coverage.out ./...
-            - go tool cover -func=coverage.out | tail -1
+          script:
+            - go test -race ./...
+
         - name: build
           image: golang:1.23
-          commands:
+          script:
             - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o whois2api ./cmd/whois2api
             - ./whois2api version
 
-  tag_push:
-    - stages:
-        - name: build and smoke
+        - name: smoke
           image: golang:1.23
-          commands:
-            - go test ./...
-            - make build
+          script:
             - bash scripts/smoke.sh
 
+# Tag pushes publish a container image. Kept under "$" because tag events are
+# repository-level and otherwise unrelated to any branch.
+$:
+  tag_push:
+    - services:
+        - docker
+      stages:
+        - name: test
+          image: golang:1.23
+          script:
+            - go test ./...
+
+        - name: build and smoke
+          image: golang:1.23
+          script:
+            - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/whois2api ./cmd/whois2api
+            - BIN=./bin/whois2api bash scripts/smoke.sh
+
         - name: docker build
-          image: docker:cli
-          commands:
-            - docker build -t "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:${CNB_TAG_NAME}" .
-            - docker push "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:${CNB_TAG_NAME}"
+          image: golang:1.23
+          script:
+            - echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" -u cnb --password-stdin
+            - docker build -t "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:$CNB_TAG_NAME" .
+            - docker push "$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE:$CNB_TAG_NAME"
