@@ -8,6 +8,32 @@
 # needs a C toolchain.
 
 main:
+  # Pull requests get the same checks as the branch they target. Without this,
+  # a PR sat on a green status that came from a pipeline nobody ran: `-race` had
+  # never executed on this project until someone added gcc by hand.
+  #
+  # Note the config is read from the *target* branch, so this only starts
+  # covering PRs after it lands on main.
+  pull_request:
+    - stages:
+        - name: lint
+          image: golang:1.23
+          script:
+            - test -z "$(gofmt -l .)" || { echo "unformatted files:"; gofmt -l .; exit 1; }
+            - go vet ./...
+
+        - name: test
+          image: golang:1.23
+          script:
+            - go test -race ./...
+
+        - name: build and smoke
+          image: golang:1.23
+          script:
+            - CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/whois2api ./cmd/whois2api
+            - ./bin/whois2api version
+            - bash scripts/smoke.sh
+
   push:
     - stages:
         - name: lint
