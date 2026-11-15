@@ -1,7 +1,7 @@
 # Whois2Api v1.3.0
 
 **Release date:** 2025-11-15
-**Commit:** b60f3d6
+**Commit:** 08f84c3
 **License:** MIT
 
 A self-hosted domain WHOIS/RDAP API that refuses to guess. One binary, one data
@@ -53,7 +53,19 @@ serve. CORS is now configurable via `W2A_CORS_ORIGINS`, **off by default** so a
 private install cannot be read by every page a visitor has open. Preflight is
 answered for allowed origins only.
 
-### 4. Module path
+### 4. Upgrading the binary did not upgrade the UI
+
+`/static/app.js` was served with `max-age=86400` and a fixed name, so replacing
+the binary left returning browsers running the previous version's JavaScript for
+up to a day — the server was upgraded, the page was not, and nothing said so.
+
+Assets are now fingerprinted: the HTML references
+`/static/app.js?v=<hash of all assets>`, so a new binary means new URLs.
+Fingerprinted URLs are `immutable` for a year, unversioned ones must revalidate,
+every asset carries an `ETag` and answers `304`, the HTML itself is `no-cache`,
+and the `/favicon.ico` redirect carries the fingerprint too.
+
+### 5. Module path
 
 The Go module is now `github.com/techjiang/Whois2Api`, matching where the project
 is published.
@@ -116,9 +128,9 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 
 - `gofmt -l .` clean, `go vet ./...` clean
 - `go test -race ./...` green on all 7 packages
-- `scripts/smoke.sh` passes, including three new assertions: private-suffix
-  names are not reported available, underscore names are rejected, and CORS is
-  closed by default
+- `scripts/smoke.sh` passes, including four new assertions: private-suffix
+  names are not reported available, underscore names are rejected, CORS is
+  closed by default, and static assets are fingerprinted and revalidated
 - Checked by hand against live registries: `registered` / `available` /
   `unknown` / subdomain / private suffix / IDN / invalid input, in both themes,
   Chinese and English, at 1100 px and 390 px (no horizontal overflow, no page
@@ -140,3 +152,8 @@ exists to prevent.
 Drop-in. `W2A_CORS_ORIGINS` is new and defaults to off, and the notice code
 `private_suffix_delegated` is additive — clients that do not know it fall back to
 the English `text`. The cache schema is unchanged; keep your `whois2api.db`.
+
+This build also fixes the upgrade path itself: because assets are now
+fingerprinted, the `max-age=86400` that previous versions sent to browsers no
+longer matters — the new binary references new asset URLs, so the first page load
+after the upgrade gets the new UI.
