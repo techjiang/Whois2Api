@@ -348,7 +348,7 @@
     var details = card.querySelector('details.raw');
     if (!details) {
       details = el('details', 'raw');
-      details.appendChild(el('summary', null, T.t('raw.summary', { source: T.t('source.' + source) })));
+      details.appendChild(el('summary', null, T.t('raw.summary.' + source)));
       var pre = el('pre');
       pre.textContent = raw;
       details.appendChild(pre);

@@ -166,3 +166,28 @@ func TestSubdomainDNSCaveatIsLabelled(t *testing.T) {
 		t.Fatalf("field.dns_of is translated %d time(s), want at least 2", len(got))
 	}
 }
+
+// The raw-panel label is a whole sentence per source, not "{source}" glued into
+// a template. Chinese needs no space around Latin script ("原始 RDAP 报文") but
+// the space belongs inside each phrase, not in the template: a template of
+// "原始 {source} 报文" renders "原始 上游 报文" for the upstream case, because
+// that label is already a Chinese word.
+func TestRawPanelLabelIsWrittenPerSource(t *testing.T) {
+	raw, err := fs.ReadFile(assetFS, "i18n.js")
+	if err != nil {
+		t.Fatalf("read i18n.js: %v", err)
+	}
+	js := string(raw)
+	if strings.Contains(js, "'raw.summary'") {
+		// A generic template is allowed only if nothing interpolates {source}.
+		if regexp.MustCompile(`'raw\.summary':\s*'[^']*\{source\}[^']*'`).MatchString(js) {
+			t.Error("raw.summary still interpolates {source}; write one label per source instead")
+		}
+	}
+	for _, src := range []string{"rdap", "whois", "upstream", "none"} {
+		key := regexp.MustCompile(`'raw\.summary\.` + regexp.QuoteMeta(src) + `':`)
+		if got := len(key.FindAllStringIndex(js, -1)); got < 2 {
+			t.Errorf("raw.summary.%s is translated %d time(s), want at least 2 (en + zh)", src, got)
+		}
+	}
+}

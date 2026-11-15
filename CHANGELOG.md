@@ -52,6 +52,11 @@ the same question, not by reading the code.
   the new card was already built and slammed the state shut.
 - **"原始 upstream 响应"** — the channel name was interpolated raw. Channel names
   are now dictionary keys, and a test fails if any of them is missing.
+- **"原始 上游 报文"** — the raw panel label was a template, `原始 {source} 报文`.
+  For the `upstream` channel the source name is itself Chinese (`上游`), so the
+  template's spaces ended up around a Chinese word. Latin script needs them,
+  Chinese doesn't: the phrase now lives in the dictionary once per source
+  (`原始 RDAP 报文`, `原始上游报文`), and a test fails if the template comes back.
 - **`DNS 解析` on a subdomain card** now names the domain that was actually
   probed (`DNS 解析（iana.org）`), because the answer is about the registrable
   domain, not the name in the title.
