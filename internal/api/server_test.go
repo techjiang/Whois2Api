@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asoe/whois2api/internal/cache"
-	"github.com/asoe/whois2api/internal/config"
-	"github.com/asoe/whois2api/internal/lookup"
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/cache"
+	"github.com/techjiang/Whois2Api/internal/config"
+	"github.com/techjiang/Whois2Api/internal/lookup"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/tld"
 )
 
 func newTestServer(t *testing.T, cfg config.Config) (*Server, *fakeUpstream) {
@@ -484,5 +484,88 @@ func TestBatchNeverShipsRawPayload(t *testing.T) {
 		if item.Domain != nil && item.Domain.Raw != "" {
 			t.Fatalf("%s carried %d bytes of raw payload", item.Query, len(item.Domain.Raw))
 		}
+	}
+}
+
+// CORS is off by default, so a private install cannot be read by any page a
+// visitor happens to have open.
+func TestCORSDisabledByDefault(t *testing.T) {
+	s, _ := newTestServer(t, config.Config{})
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", map[string]string{
+		"Origin": "https://evil.example",
+	})
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
+	}
+	// A preflight must not be answered when nothing is allowed.
+	pre := doRequest(t, s, http.MethodOptions, "/api/v1/batch", "", map[string]string{
+		"Origin": "https://evil.example", "Access-Control-Request-Method": "POST",
+	})
+	if pre.Code != http.StatusMethodNotAllowed {
+		t.Errorf("preflight status = %d, want 405", pre.Code)
+	}
+}
+
+// With W2A_CORS_ORIGINS set, a browser client can read answers — and the
+// preflight for the batch endpoint is answered instead of 405, which is what
+// made POST /api/v1/batch unusable from any page this process did not serve.
+func TestCORSAllowedOrigin(t *testing.T) {
+	s, _ := newTestServer(t, config.Config{CORSOrigins: []string{"https://app.example"}})
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", map[string]string{
+		"Origin": "https://app.example",
+	})
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://app.example" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want the configured origin", got)
+	}
+	// Credentials are never advertised: auth is a bearer token, and combining
+	// the two would be a lie the browser acts on.
+	if rec.Header().Get("Access-Control-Allow-Credentials") != "" {
+		t.Error("Access-Control-Allow-Credentials must not be set")
+	}
+
+	pre := doRequest(t, s, http.MethodOptions, "/api/v1/batch", "", map[string]string{
+		"Origin": "https://app.example", "Access-Control-Request-Method": "POST",
+	})
+	if pre.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want 204", pre.Code)
+	}
+	if got := pre.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "POST") {
+		t.Errorf("Access-Control-Allow-Methods = %q, want POST", got)
+	}
+
+	// A different origin stays out.
+	other := doRequest(t, s, http.MethodGet, "/api/v1/domain/example.com", "", map[string]string{
+		"Origin": "https://evil.example",
+	})
+	if got := other.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("unlisted origin got %q", got)
+	}
+}
+
+// A private-suffix name must not come back `available` even when the registry
+// says "no match", because the registry does not administer it.
+func TestPrivateSuffixVerdictIsUnknown(t *testing.T) {
+	s, _ := newTestServer(t, config.Config{})
+	rec := doRequest(t, s, http.MethodGet, "/api/v1/domain/foo.uk.com", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var body struct {
+		Domain model.Domain `json:"domain"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	// The fake upstream always reports available for "free-*" and registered
+	// otherwise; here the point is that the fake's registered verdict survives
+	// and the caveat is attached.
+	found := false
+	for _, a := range body.Domain.Alerts {
+		if a.Code == model.NoticePrivateSuffix.Code {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("alerts = %+v, want %q", body.Domain.Alerts, model.NoticePrivateSuffix.Code)
 	}
 }

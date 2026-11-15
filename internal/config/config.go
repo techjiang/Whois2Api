@@ -51,6 +51,10 @@ type Config struct {
 	RefreshTable bool
 	// LogLevel is "debug", "info", "warn" or "error".
 	LogLevel string
+	// CORSOrigins lists browser origins allowed to call the JSON API. Empty
+	// disables CORS entirely, which is the right default for a private install:
+	// a browser-served page on another origin then cannot read answers.
+	CORSOrigins []string
 }
 
 // Default returns the configuration used when the environment is empty.
@@ -101,6 +105,20 @@ func Load() (Config, error) {
 	c.WhoIsFirst = envBool("W2A_WHOIS_FIRST", c.WhoIsFirst, fail)
 	c.RDAPOnly = envBool("W2A_RDAP_ONLY", c.RDAPOnly, fail)
 	c.RefreshTable = envBool("W2A_REFRESH_TABLE", c.RefreshTable, fail)
+
+	if raw := strings.TrimSpace(os.Getenv("W2A_CORS_ORIGINS")); raw != "" {
+		for _, origin := range strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' }) {
+			origin = strings.TrimSuffix(strings.TrimSpace(origin), "/")
+			if origin == "" {
+				continue
+			}
+			if origin != "*" && !strings.Contains(origin, "://") {
+				fail("W2A_CORS_ORIGINS entry %q must be a full origin such as https://example.com, or *", origin)
+				continue
+			}
+			c.CORSOrigins = append(c.CORSOrigins, origin)
+		}
+	}
 
 	if raw := strings.TrimSpace(os.Getenv("W2A_TRUSTED_PROXIES")); raw != "" {
 		nets, err := parseCIDRs(raw)

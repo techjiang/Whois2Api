@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asoe/whois2api/internal/api"
-	"github.com/asoe/whois2api/internal/cache"
-	"github.com/asoe/whois2api/internal/config"
-	"github.com/asoe/whois2api/internal/lookup"
-	"github.com/asoe/whois2api/internal/tld"
-	"github.com/asoe/whois2api/internal/version"
+	"github.com/techjiang/Whois2Api/internal/api"
+	"github.com/techjiang/Whois2Api/internal/cache"
+	"github.com/techjiang/Whois2Api/internal/config"
+	"github.com/techjiang/Whois2Api/internal/lookup"
+	"github.com/techjiang/Whois2Api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/version"
 )
 
 func main() {
@@ -225,9 +225,10 @@ Environment:
   W2A_TRUSTED_PROXIES comma-separated CIDRs allowed to set X-Forwarded-For
   W2A_REFRESH_TABLE  fetch the IANA TLD table on boot (default false)
   W2A_RDAP_ONLY      skip WHOIS entirely (default false)
+  W2A_CORS_ORIGINS   origins allowed to call the JSON API (default none; * for all)
   W2A_LOG_LEVEL      debug|info|warn|error (default info)
 
-Docs: https://github.com/asoe/whois2api
+Docs: https://github.com/techjiang/Whois2Api
 `, version.Version)
 }
 

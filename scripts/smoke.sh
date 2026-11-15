@@ -132,6 +132,26 @@ else
   echo "  note no alerts on this answer; skipping the shape check"
 fi
 
+# A name below a vendor-run suffix is not the TLD registry's to sell: its
+# "no match" must not come back as an availability claim. Verisign really does
+# answer `No match for "FOO.UK.COM"`.
+private=$(curl -s -m 20 "${auth[@]}" "$BASE/api/v1/domain/foo.uk.com")
+printf '%s' "$private" | grep -q '"status":"available"' && fail "private-suffix name reported available: $private"
+printf '%s' "$private" | grep -q '"code":"private_suffix_delegated"' || fail "private-suffix caveat missing"
+pass "private-suffix names are not reported available"
+
+# Underscores are valid in DNS records but never in a registrable name. Letting
+# one through produced a confident `available` for a name that cannot exist.
+code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "${auth[@]}" "$BASE/api/v1/domain/a_b.com")
+[ "$code" = "400" ] || fail "underscore name returned $code, want 400"
+pass "underscore names are rejected"
+
+# CORS stays off unless asked for, so a private install cannot be read by any
+# page a visitor has open.
+curl -s -D - -o /dev/null -m 5 -H 'Origin: https://evil.example' "$BASE/api/v1/domain/example.com" \
+  | grep -qi 'Access-Control-Allow-Origin' && fail "CORS leaked to an unconfigured origin"
+pass "CORS is closed by default"
+
 # Graceful shutdown: the process must exit 0 and leave a valid database.
 kill -TERM "$PID"
 for _ in $(seq 1 40); do

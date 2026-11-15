@@ -175,7 +175,7 @@ func httpGet(ctx context.Context, client *http.Client, url string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "whois2api/1.0 (+https://github.com/asoe/whois2api)")
+	req.Header.Set("User-Agent", "whois2api/1.0 (+https://github.com/techjiang/Whois2Api)")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

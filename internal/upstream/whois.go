@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asoe/whois2api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/parse"
 )
 
 const (

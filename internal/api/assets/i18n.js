@@ -36,7 +36,7 @@
 
       'status.looking': 'Looking up {name}…',
       'status.progress': 'querying RDAP and WHOIS in parallel',
-      'error.looking': 'Could not look up {name}',
+      'error.looking': 'Could not look up \u201c{name}\u201d',
       'error.network': 'Could not reach the API.',
       'error.networkHint': 'Check your connection and try again.',
       'error.unknown': 'Unknown error.',
@@ -102,6 +102,7 @@
       'notice.registered_without_dns': 'Registered but currently has no address records (parked or not yet configured).',
       'notice.unknown_but_dns': 'No definitive registry answer, but the name resolves over DNS, so it is almost certainly registered.',
       'notice.no_answer_no_dns': 'No definitive registry answer and DNS has no records; availability is unconfirmed.',
+      'notice.private_suffix_delegated': 'This name is handed out by the operator of a private suffix (like github.io or uk.com), not by the TLD registry — so the registry has no record of it and its answer says nothing about availability.',
       'notice.subdomain_parent_available': 'This is a subdomain; only its registrable domain can be registered.',
       'notice.expired': 'Registration has expired according to the registry.',
       'notice.expires_within_7_days': 'Expires within 7 days; renewal is urgent.',
@@ -156,7 +157,7 @@
 
       'status.looking': '正在查询 {name}…',
       'status.progress': '正在并行请求 RDAP 与 WHOIS',
-      'error.looking': '无法查询 {name}',
+      'error.looking': '无法查询「{name}」',
       'error.network': '连不上接口。',
       'error.networkHint': '检查一下网络，然后重试。',
       'error.unknown': '未知错误。',
@@ -222,6 +223,7 @@
       'notice.registered_without_dns': '已注册，但目前没有地址记录（可能被停放，或者还没配好）。',
       'notice.unknown_but_dns': '注册局没有给出确定答案，但域名在 DNS 上有解析，几乎可以确定已注册。',
       'notice.no_answer_no_dns': '注册局没有给出确定答案，DNS 也没有记录；是否可注册无法确认。',
+      'notice.private_suffix_delegated': '这个名字由私有后缀（如 github.io、uk.com）的运营方分发，不由顶级域注册局管理；注册局查不到它，它的回答不能说明这个名字能否注册。',
       'notice.subdomain_parent_available': '这是子域名；只有它的可注册主域名才可能被注册。',
       'notice.expired': '按注册局记录，这个域名已经过期。',
       'notice.expires_within_7_days': '7 天内到期，需要马上续费。',

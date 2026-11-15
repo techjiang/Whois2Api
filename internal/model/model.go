@@ -74,6 +74,8 @@ var (
 		Text: "Registered but currently has no address records (parked or not yet configured)."}
 	NoticeUnknownButDNS = Notice{Code: "unknown_but_dns",
 		Text: "No definitive registry answer, but the name resolves over DNS, so it is almost certainly registered."}
+	NoticePrivateSuffix = Notice{Code: "private_suffix_delegated",
+		Text: "This name is delegated by the operator of a private public suffix (such as github.io or uk.com); the TLD registry has no record of it, so its answer is not evidence about availability."}
 	NoticeSubdomainParentAvailable = Notice{Code: "subdomain_parent_available",
 		Text: "This is a subdomain; only its registrable domain can be registered."}
 	NoticeExpired = Notice{Code: "expired",

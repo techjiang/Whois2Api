@@ -1,4 +1,4 @@
-module github.com/asoe/whois2api
+module github.com/techjiang/Whois2Api
 
 go 1.23
 

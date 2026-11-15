@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/parse"
-	"github.com/asoe/whois2api/internal/tld"
-	"github.com/asoe/whois2api/internal/upstream"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/upstream"
 )
 
 // ErrInvalidDomain is returned for input that is not a domain name.
@@ -84,6 +84,11 @@ type Target struct {
 	Suffix string
 	// Registrable is the eTLD+1 of Input.
 	Registrable string
+	// PrivateSuffix is set when the name sits strictly below a PRIVATE-section
+	// public suffix (github.io, uk.com, s3.amazonaws.com). Those suffixes are
+	// handed out by a vendor, not by the TLD registry, so the registry has no
+	// record of the name and its "no match" is not an answer.
+	PrivateSuffix bool
 }
 
 // Prepare normalizes user input and decides what to ask upstream.
@@ -122,6 +127,10 @@ func (e *Engine) Prepare(input string) (*Target, error) {
 	// differ from the input's TLD for multi-label suffixes like "github.io".
 	queryLabels := strings.Split(registrable, ".")
 	t.TLD = queryLabels[len(queryLabels)-1]
+	// A name strictly below a vendor-managed suffix is invisible to the TLD
+	// registry. Note the strictness: the suffix itself (github.io, uk.com) does
+	// have a registry record and must be queried normally.
+	t.PrivateSuffix = e.psl.IsPrivateSuffix(suffix) && !strings.EqualFold(registrable, suffix)
 	return t, nil
 }
 

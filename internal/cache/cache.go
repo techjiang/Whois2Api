@@ -23,7 +23,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/asoe/whois2api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/model"
 )
 
 // ErrMiss means no entry exists for the key.

@@ -114,3 +114,40 @@ func parseArg(s string) *string {
 	}
 	return &s
 }
+
+// A name strictly below a vendor-managed suffix is invisible to the TLD
+// registry, and the registry's "no match" is not evidence of availability.
+// Treating it as such is the exact failure mode this project exists to prevent.
+func TestPrivateSuffixDetection(t *testing.T) {
+	list := MustDefault()
+	cases := []struct {
+		suffix string
+		want   bool
+	}{
+		{"github.io", true},
+		{"uk.com", true},
+		{"co.com", true},
+		{"s3.amazonaws.com", true},
+		{"com", false},
+		{"co.uk", false},
+		{"io", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := list.IsPrivateSuffix(c.suffix); got != c.want {
+			t.Errorf("IsPrivateSuffix(%q) = %v, want %v", c.suffix, got, c.want)
+		}
+	}
+}
+
+// Underscores are legal in DNS records but never in a registrable name. They
+// used to pass validation, so "a_b.com" was queried verbatim, Verisign answered
+// "no match" because no such name can exist, and the verdict came back
+// `available`.
+func TestUnderscoreIsNotADomain(t *testing.T) {
+	for _, name := range []string{"a_b.com", "_dmarc.example.com", "a_b.co.uk"} {
+		if _, err := Normalize(name); err == nil {
+			t.Errorf("Normalize(%q) accepted a name with an underscore", name)
+		}
+	}
+}

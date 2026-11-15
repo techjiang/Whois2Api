@@ -24,8 +24,13 @@ const (
 
 // List is an immutable Public Suffix List matcher.
 type List struct {
-	rules   map[string]uint8
-	private bool
+	rules map[string]uint8
+	// privateRules holds the rules that came from the PRIVATE section. They are
+	// merged into rules for matching, but kept separately because they mean
+	// something different to a lookup: a name under "github.io" or "uk.com" is
+	// delegated by a third party, and the TLD registry cannot answer for it.
+	privateRules map[string]uint8
+	private      bool
 }
 
 // Options controls which portions of the PSL are loaded.
@@ -60,23 +65,59 @@ func MustDefault() *List {
 
 // New loads the embedded PSL data according to opts.
 func New(opts Options) (*List, error) {
-	raw, err := gunzipBase64(pslICANNGzipB64)
+	icann, err := gunzipBase64(pslICANNGzipB64)
 	if err != nil {
 		return nil, fmt.Errorf("tld: embedded ICANN rules are corrupt: %w", err)
 	}
+	var private string
 	if opts.Private {
-		priv, privErr := gunzipBase64(pslPrivateGzipB64)
-		if privErr != nil {
-			return nil, fmt.Errorf("tld: embedded PRIVATE rules are corrupt: %w", privErr)
+		private, err = gunzipBase64(pslPrivateGzipB64)
+		if err != nil {
+			return nil, fmt.Errorf("tld: embedded PRIVATE rules are corrupt: %w", err)
 		}
-		raw += "\n" + priv
 	}
-	l, err := parseList(raw)
+	l, err := parseList(icann + "\n" + private)
 	if err != nil {
 		return nil, err
 	}
+	if opts.Private {
+		privateList, privErr := parseList(private)
+		if privErr != nil {
+			return nil, privErr
+		}
+		l.privateRules = privateList.rules
+	}
 	l.private = opts.Private
 	return l, nil
+}
+
+// IsPrivateSuffix reports whether suffix is a PRIVATE-section rule: a "public
+// suffix" owned by a vendor rather than a registry (github.io, uk.com,
+// s3.amazonaws.com). Names below one of these are handed out by that vendor, so
+// the TLD registry has no record of them and answers "no match" for a name that
+// is not for sale. Treating that answer as availability is exactly the bug this
+// project exists to prevent.
+func (l *List) IsPrivateSuffix(suffix string) bool {
+	if l == nil || len(l.privateRules) == 0 || suffix == "" {
+		return false
+	}
+	labels := strings.Split(strings.ToLower(strings.TrimSuffix(suffix, ".")), ".")
+	for i := range labels {
+		candidate := strings.Join(labels[i:], ".")
+		bits, ok := l.privateRules[candidate]
+		if !ok {
+			continue
+		}
+		if bits&ruleExact != 0 && i == 0 {
+			return true
+		}
+		// A wildcard rule whose key is the parent of this suffix ("*.ck" stored
+		// under "ck") also makes it a private suffix.
+		if bits&ruleWildcard != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseList builds a matcher from raw list text (publicsuffix.org format).
@@ -165,10 +206,15 @@ func Normalize(name string) (ascii string, err error) {
 	if strings.HasPrefix(name, ".") || strings.Contains(name, "..") {
 		return "", ErrNotDomain
 	}
+	// Underscores are deliberately rejected. They are legal in DNS records
+	// (_dmarc.example.com) but never in a registrable name, and letting one
+	// through meant "a_b.com" was queried as typed, the registry answered
+	// "no match" because no such name can exist, and the result was a confident
+	// `available`.
 	for _, r := range name {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '-' || r == '.' || r == '_':
+		case r == '-' || r == '.':
 		case r >= 0x80:
 		default:
 			return "", ErrNotDomain
@@ -208,7 +254,7 @@ func validateLabels(ascii string) error {
 			switch {
 			case c >= 'a' && c <= 'z':
 			case c >= '0' && c <= '9':
-			case c == '-' || c == '_':
+			case c == '-':
 			default:
 				return ErrNotDomain
 			}

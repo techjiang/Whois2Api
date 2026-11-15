@@ -3,8 +3,8 @@ package lookup
 import (
 	"time"
 
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/parse"
 )
 
 // viewAlertCodes are the caveats that describe *this request* rather than the
@@ -21,6 +21,7 @@ var viewAlertCodes = map[string]struct{}{
 	model.NoticeRegisteredWithoutDNS.Code:     {},
 	model.NoticeDNSResolvesButAvailable.Code:  {},
 	model.NoticeUnknownButDNS.Code:            {},
+	model.NoticePrivateSuffix.Code:            {},
 }
 
 // present adapts a freshly-resolved (and therefore un-normalized-for-this-
@@ -58,6 +59,20 @@ func present(d *model.Domain, t *Target) *model.Domain {
 		out.Alerts = mergeAlerts(out.Alerts, alerts)
 		if confidence != nil {
 			out.Confidence = *confidence
+		}
+	}
+
+	// A name below a vendor-managed suffix (github.io, uk.com) is not the TLD
+	// registry's to sell, so its "no match" is not evidence of availability.
+	// This lives here, not in the engine, for the same reason as the subdomain
+	// rewrite below: the entry is shared, and a rewrite at lookup time would
+	// bake one caller's name into another caller's answer.
+	if t.PrivateSuffix {
+		out.Alerts = mergeAlerts(out.Alerts, []model.Notice{model.NoticePrivateSuffix})
+		if out.Verdict == model.VerdictAvailable {
+			out.Verdict = model.VerdictUnknown
+			out.Confidence = model.ConfidenceNone
+			out.Source = ""
 		}
 	}
 

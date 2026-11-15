@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asoe/whois2api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/model"
 )
 
 // noticeCatalogue is every caveat the engine and API can emit. A new notice
@@ -21,6 +21,7 @@ func noticeCatalogue() []model.Notice {
 		model.NoticeDNSResolvesButAvailable,
 		model.NoticeRegisteredWithoutDNS,
 		model.NoticeUnknownButDNS,
+		model.NoticePrivateSuffix,
 		model.NoticeSubdomainParentAvailable,
 		model.NoticeExpired,
 		model.NoticeExpiresWithin7Days,

@@ -14,9 +14,9 @@ ARG COMMIT=none
 ARG BUILD_DATE=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
       -ldflags "-s -w \
-        -X github.com/asoe/whois2api/internal/version.Version=${VERSION} \
-        -X github.com/asoe/whois2api/internal/version.Commit=${COMMIT} \
-        -X github.com/asoe/whois2api/internal/version.Date=${BUILD_DATE}" \
+        -X github.com/techjiang/Whois2Api/internal/version.Version=${VERSION} \
+        -X github.com/techjiang/Whois2Api/internal/version.Commit=${COMMIT} \
+        -X github.com/techjiang/Whois2Api/internal/version.Date=${BUILD_DATE}" \
       -o /out/whois2api ./cmd/whois2api
 
 # --- runtime -----------------------------------------------------------------

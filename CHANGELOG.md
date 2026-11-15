@@ -3,6 +3,56 @@
 All notable changes are recorded here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2025-11-15
+
+Release build. Everything here was found by querying the running binary against
+live registries, not by reading the code — and two of the four were verdict
+errors, the category this project exists to eliminate.
+
+### Fixed
+
+- **A name below a vendor-run suffix was reported `available`.** Verisign really
+  does answer `No match for "FOO.UK.COM"` — literally correct, and completely
+  wrong as a verdict, because `.com`'s registry does not administer names under
+  `uk.com`. Same for `a.b.github.io`, `x.s3.amazonaws.com` and every other
+  PRIVATE-section suffix. The PSL now tracks which rules came from the PRIVATE
+  section, and a name strictly below one of them is `unknown` with a
+  `private_suffix_delegated` caveat instead of a confident buying signal. The
+  suffix itself (`github.io`, `uk.com`) still has a real record and is queried
+  normally.
+- **`a_b.com` was reported `available`.** An underscore is legal in a DNS record
+  (`_dmarc.example.com`) but never in a registrable name, so the name went
+  upstream as typed, the registry answered "no match" because no such name can
+  exist, and the answer came back `available` with 95% confidence. Underscores
+  are now rejected at normalization with `invalid_domain`.
+- **The API was unreachable from browser clients.** No CORS headers at all, and
+  `OPTIONS` fell through to a 405 — so `POST /api/v1/batch` could not be called
+  from any page this process did not serve. CORS is now configurable
+  (`W2A_CORS_ORIGINS`), off by default so a private install cannot be read by
+  every page a visitor has open, and preflight is answered for allowed origins.
+
+### Changed
+
+- **The Go module path is `github.com/techjiang/Whois2Api`**, matching where the
+  project is published. Imports, the Makefile and the Dockerfile follow.
+
+### Added
+
+- `W2A_CORS_ORIGINS` — comma-separated origins, or `*`. `/api/` only; the UI and
+  its assets stay same-origin. `Access-Control-Allow-Credentials` is never sent:
+  this API authenticates with a bearer token, not cookies.
+- Notice code `private_suffix_delegated`, with translations in both UI languages.
+- Regression tests for all four: the private-suffix verdict on cold and warm
+  answers, the underscore rejection, CORS off-by-default, and an allowed-origin
+  preflight that must be answered rather than 405.
+
+### Verified
+
+`gofmt -l .` clean, `go vet ./...` clean, `go test -race ./...` green on all 7
+packages, `scripts/smoke.sh` passing, and a live instance checked by hand for
+`registered` / `available` / `unknown` / subdomain / private suffix / IDN /
+invalid input in both themes and at 390 px.
+
 ## [1.2.1] — 2025-11-15
 
 Same domain, same answer. This release fixes the cases where the response

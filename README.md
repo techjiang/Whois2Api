@@ -30,7 +30,7 @@ Whois2Api is built around the opposite rule:
 
 > If no registry gave an affirmative answer, say **unknown**. Never guess.
 
-Two concrete traps it handles, both verified against live registries:
+Traps it handles, each verified against live registries:
 
 | Case | Naive behaviour | Whois2Api |
 |---|---|---|
@@ -38,6 +38,7 @@ Two concrete traps it handles, both verified against live registries:
 | `.io` / `.me` / `.ai` registered records | Legal footer contains "rate limited" / "not permitted" → **unknown** or wrong | Anchored matching ignores disclaimers; reports `registered` |
 | `.hk` registered record | Body says "**not** available for registration" → **available** (inverted) | Phrase-aware rules report `registered` |
 | `.ca` / `.nz` / `.kr` restricted names | Error response → **available** | Reports `registered` with a "restricted" note |
+| `foo.uk.com` / `a.b.github.io` | Registry answers "No match" → **available** | Reports `unknown`: the suffix is vendor-run, the TLD registry has no record and its answer is not evidence |
 
 ## Quick start
 
@@ -55,7 +56,7 @@ Open <http://localhost:8080>.
 ### Binary
 
 ```bash
-curl -fsSL https://github.com/asoe/whois2api/releases/latest/download/whois2api-linux-amd64 -o whois2api
+curl -fsSL https://github.com/techjiang/Whois2Api/releases/latest/download/whois2api-linux-amd64 -o whois2api
 chmod +x whois2api
 ./whois2api
 ```
@@ -66,7 +67,7 @@ step, and no configuration file to write.
 ### From source
 
 ```bash
-git clone https://github.com/asoe/whois2api && cd whois2api
+git clone https://github.com/techjiang/Whois2Api && cd whois2api
 make build && ./bin/whois2api
 ```
 
@@ -298,6 +299,7 @@ Every setting has a working default; environment variables are optional.
 | `W2A_RDAP_ONLY` | `false` | Skip WHOIS entirely |
 | `W2A_WHOIS_FIRST` | `false` | Prefer WHOIS when both agree |
 | `W2A_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `W2A_CORS_ORIGINS` | *(none)* | Comma-separated origins allowed to call the JSON API, or `*` |
 
 Invalid values fail at startup with a message naming the offending variable.
 
@@ -310,6 +312,25 @@ rate limits by forging the header.
 ```bash
 W2A_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
 ```
+
+### Calling the API from a browser page
+
+CORS is **off by default**. The bundled UI is same-origin, and an open API that
+any page a visitor has open can read is a data-leak waiting for a policy
+decision — so turning it on is a deliberate act, not a default:
+
+```bash
+W2A_CORS_ORIGINS=https://app.example.com,https://admin.example.com
+```
+
+`W2A_CORS_ORIGINS=*` opens the API to every origin, which is only reasonable for
+a read-only public instance with no tokens configured.
+
+Only the JSON API is opened up; the HTML page and its assets stay same-origin.
+Preflight requests are answered for allowed origins, which is what makes
+`POST /api/v1/batch` usable at all from another origin — without it the browser
+gets a 405 and never sends the request. `Access-Control-Allow-Credentials` is
+never sent: this API authenticates with a bearer token, not cookies.
 
 ## Backup and migration
 

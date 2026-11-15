@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asoe/whois2api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/tld"
 )
 
 func testEngine(t *testing.T) *Engine {
@@ -109,4 +110,79 @@ func TestRouteForKnownAndUnknownTLD(t *testing.T) {
 	if _, err := e.Route(tgt); !errors.Is(err, ErrUnsupportedTLD) {
 		t.Fatalf("Route(unknown) error = %v, want ErrUnsupportedTLD", err)
 	}
+}
+
+// A name below a vendor-managed suffix sits outside the registry's authority,
+// so the registry's "no match" must not become `available`. Verisign really
+// does answer `No match for "FOO.UK.COM"`; the name is simply not Verisign's to
+// sell.
+func TestPrivateSuffixIsNotAvailability(t *testing.T) {
+	e := testEngine(t)
+	cases := []struct {
+		in      string
+		private bool
+	}{
+		{"foo.uk.com", true},
+		{"a.b.github.io", true},
+		{"uk.com", false},    // the suffix itself has a real record
+		{"github.io", false}, // same
+		{"example.com", false},
+		{"example.co.uk", false},
+	}
+	for _, c := range cases {
+		target, err := e.Prepare(c.in)
+		if err != nil {
+			t.Fatalf("Prepare(%q): %v", c.in, err)
+		}
+		if target.PrivateSuffix != c.private {
+			t.Errorf("Prepare(%q).PrivateSuffix = %v, want %v", c.in, target.PrivateSuffix, c.private)
+		}
+	}
+
+	// The rewrite itself lives in present(), so it applies to cold and warm
+	// answers alike: an `available` verdict for such a name becomes `unknown`,
+	// and the caller is told why.
+	target, err := e.Prepare("foo.uk.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	available := present(&model.Domain{
+		Verdict: model.VerdictAvailable, Confidence: model.ConfidenceStrong, Source: model.SourceWhoIs,
+	}, target)
+	if available.Verdict != model.VerdictUnknown {
+		t.Errorf("verdict = %q, want unknown", available.Verdict)
+	}
+	if !hasNotice(available.Alerts, model.NoticePrivateSuffix.Code) {
+		t.Errorf("alerts = %+v, want %q", available.Alerts, model.NoticePrivateSuffix.Code)
+	}
+
+	// It must not touch a genuinely authoritative answer.
+	registered := present(&model.Domain{
+		Verdict: model.VerdictRegistered, Confidence: model.ConfidenceStrong,
+	}, target)
+	if registered.Verdict != model.VerdictRegistered {
+		t.Errorf("verdict = %q, want registered to survive", registered.Verdict)
+	}
+
+	// And a plain .com name is untouched either way.
+	plain, err := e.Prepare("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	free := present(&model.Domain{Verdict: model.VerdictAvailable, Confidence: model.ConfidenceStrong}, plain)
+	if free.Verdict != model.VerdictAvailable {
+		t.Errorf("example.com verdict = %q, want available to survive", free.Verdict)
+	}
+	if hasNotice(free.Alerts, model.NoticePrivateSuffix.Code) {
+		t.Error("example.com must not carry the private-suffix caveat")
+	}
+}
+
+func hasNotice(list []model.Notice, code string) bool {
+	for _, n := range list {
+		if n.Code == code {
+			return true
+		}
+	}
+	return false
 }

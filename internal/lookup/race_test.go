@@ -3,8 +3,8 @@ package lookup
 import (
 	"testing"
 
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/parse"
 )
 
 // choose() ranks by evidence, and the raw payload follows the winner. When the

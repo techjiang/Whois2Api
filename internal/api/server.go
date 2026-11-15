@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asoe/whois2api/internal/config"
-	"github.com/asoe/whois2api/internal/lookup"
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/version"
+	"github.com/techjiang/Whois2Api/internal/config"
+	"github.com/techjiang/Whois2Api/internal/lookup"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/version"
 )
 
 // batchConcurrency bounds how many domains one batch request resolves at once.
@@ -74,7 +74,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/batch", methodNotAllowed(http.MethodPost))
 	mux.HandleFunc("/api/v1/status", methodNotAllowed(http.MethodGet))
 
-	return s.withRecovery(s.withRequestLog(s.withSecurityHeaders(mux)))
+	return s.withRecovery(s.withRequestLog(s.withCORSPreflight(s.withCORS(s.withSecurityHeaders(mux)))))
 }
 
 // methodNotAllowed answers a deterministic 405 instead of the default 404.
@@ -98,6 +98,77 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// allowOrigin reports whether a browser origin may read API answers, and what
+// to echo back. An empty config disables CORS: the UI is same-origin, and a
+// private install should not become readable by every page a visitor has open.
+func (s *Server) allowOrigin(origin string) (string, bool) {
+	if origin == "" || len(s.cfg.CORSOrigins) == 0 {
+		return "", false
+	}
+	for _, allowed := range s.cfg.CORSOrigins {
+		if allowed == "*" {
+			return "*", true
+		}
+		if strings.EqualFold(allowed, origin) {
+			return origin, true
+		}
+	}
+	return "", false
+}
+
+// withCORS adds the response headers that let a browser read the JSON API.
+// Only the JSON API is opened up: the UI's own assets and the HTML page are
+// same-origin by design.
+func (s *Server) withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			if origin, ok := s.allowOrigin(r.Header.Get("Origin")); ok {
+				h := w.Header()
+				h.Set("Access-Control-Allow-Origin", origin)
+				// A wildcard cannot be combined with credentials, and this API
+				// is token-based rather than cookie-based, so the header is not
+				// needed and must not be advertised.
+				if origin != "*" {
+					h.Add("Vary", "Origin")
+				}
+				// Only headers this server actually sets: advertising a header
+				// that never arrives makes a client wait for something that
+				// cannot come.
+				h.Set("Access-Control-Expose-Headers", "Retry-After")
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// withCORSPreflight answers the browser's preflight for the write-enabled
+// endpoint. Without this, POST /api/v1/batch is unusable from any page that is
+// not served by this process: the browser sends OPTIONS, gets 405, and stops.
+func (s *Server) withCORSPreflight(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodOptions || !strings.HasPrefix(r.URL.Path, "/api/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		origin, ok := s.allowOrigin(r.Header.Get("Origin"))
+		if !ok {
+			// No CORS configured: keep the deterministic 405 the mux would
+			// have produced, rather than implying the endpoint accepts OPTIONS.
+			next.ServeHTTP(w, r)
+			return
+		}
+		h := w.Header()
+		h.Set("Access-Control-Allow-Origin", origin)
+		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		h.Set("Access-Control-Max-Age", "600")
+		if origin != "*" {
+			h.Add("Vary", "Origin")
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 }
 

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asoe/whois2api/internal/cache"
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/cache"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/tld"
 )
 
 // fakeResolver lets tests drive the engine deterministically without network.

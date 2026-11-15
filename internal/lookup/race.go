@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asoe/whois2api/internal/model"
-	"github.com/asoe/whois2api/internal/parse"
-	"github.com/asoe/whois2api/internal/tld"
+	"github.com/techjiang/Whois2Api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/tld"
 	"golang.org/x/net/idna"
 )
 

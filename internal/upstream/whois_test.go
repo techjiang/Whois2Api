@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asoe/whois2api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/parse"
 )
 
 // fakeWhois starts a local server that replies with response per query.

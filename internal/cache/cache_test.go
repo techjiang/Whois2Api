@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asoe/whois2api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/model"
 )
 
 func openTestCache(t *testing.T, opts Options) *Cache {

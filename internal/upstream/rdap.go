@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asoe/whois2api/internal/parse"
+	"github.com/techjiang/Whois2Api/internal/parse"
 )
 
 // maxRDAPBody bounds how much of an RDAP response we read. Real documents are
@@ -138,4 +138,4 @@ func classifyNetErr(prefix string, err error) error {
 	}
 }
 
-const userAgent = "whois2api/1.0 (+https://github.com/asoe/whois2api)"
+const userAgent = "whois2api/1.0 (+https://github.com/techjiang/Whois2Api)"

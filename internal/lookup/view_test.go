@@ -3,7 +3,7 @@ package lookup
 import (
 	"testing"
 
-	"github.com/asoe/whois2api/internal/model"
+	"github.com/techjiang/Whois2Api/internal/model"
 )
 
 func availableDomain() *model.Domain {

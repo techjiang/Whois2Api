@@ -155,6 +155,7 @@ Codes currently emitted:
 | `dns_resolves_but_available` | Registry says free, DNS says it resolves (wildcard or lag) |
 | `registered_without_dns` | Registered but no address records right now |
 | `unknown_but_dns` | No registry answer, but the name resolves — almost certainly taken |
+| `private_suffix_delegated` | The name sits below a vendor-run suffix (`github.io`, `uk.com`); the TLD registry cannot answer for it |
 | `subdomain_parent_available` | You asked about a subdomain; only the registrable parent is registrable |
 | `expired` | Registration has expired |
 | `expires_within_7_days` / `expires_within_30_days` | Renewal risk |
